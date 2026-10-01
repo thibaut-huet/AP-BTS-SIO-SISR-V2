@@ -1,7 +1,7 @@
 # Installation et Configuration d'un Active Directory
 
 **Auteur :** Thibaut HUET  
-**Date :** Juin 2026  
+**Date :** septembre 2026  
 **Contexte :** Projet AP BTS SIO — Infrastructure GSB
 
 ---
@@ -25,7 +25,7 @@
 
 ## 1. Introduction
 
-Vous venez d'être recruté comme technicien système et réseau dans une PME appelée **TechnoLab**. L'entreprise souhaite centraliser l'administration de ses utilisateurs et postes informatiques grâce à un serveur Active Directory.
+Vous venez d'être recruté comme technicien système et réseau dans une PME appelée **RedOne**. L'entreprise souhaite centraliser l'administration de ses utilisateurs et postes informatiques grâce à un serveur Active Directory.
 
 ### Objectif
 
@@ -33,7 +33,7 @@ Créer un Active Directory fonctionnel permettant la gestion centralisée des id
 
 ### Ressources utilisées
 
-- **VMware Workstation Player** (hyperviseur de type 2)
+- **Proxmox** (hyperviseur de type 1)
 - **ISO Windows Server 2022** (pour le contrôleur de domaine)
 - **ISO Windows 10/11** (pour le poste client test)
 
@@ -52,7 +52,7 @@ Créer un Active Directory fonctionnel permettant la gestion centralisée des id
 
 ### Installation de l'hyperviseur
 
-Le choix s'est porté sur **VMware Workstation Player** comme hyperviseur de type 2. L'installation s'est déroulée de manière standard sur la machine physique (Dell Latitude 7420, Intel Core i7-11th gen, 16 Go RAM).
+Utilisation de **Proxmox** comme hyperviseur de type 1. Configuration du serveur physique de l'école avec Proxmox et séparation en VLAN pour chaque projet étudiant.
 
 ### Création des Machines Virtuelles
 
@@ -63,7 +63,7 @@ Deux machines virtuelles distinctes ont été créées :
 | Système d'exploitation | Windows Server 2022 | Windows 10/11 Pro |
 | Mémoire vive (RAM) | 4 Go | 2 à 4 Go |
 | Processeur (CPU) | 2 vCPU | 1 ou 2 vCPU |
-| Espace disque | 20 Go | 20 Go ou plus |
+| Espace disque | 60 Go | 20 Go ou plus |
 | Type de réseau | NAT | NAT (identique au serveur) |
 
 ![Création et paramétrage de la VM serveur SRV-AD](images/image12.jpg)
@@ -84,7 +84,7 @@ Choisir **Windows Server 2022 Standard (Desktop Experience)** afin de disposer d
 
 ### Partitionnement
 
-Partitionner le disque virtuel de 20 Go et exécuter l'assistant d'installation.
+Partitionner le disque virtuel de 60 Go et exécuter l'assistant d'installation.
 
 ![Partitionnement du disque virtuel](images/image3.jpg)
 
@@ -113,10 +113,10 @@ Un contrôleur de domaine doit obligatoirement posséder une **configuration IP 
 
 | Paramètre | Valeur |
 |---|---|
-| Adresse IP | `192.168.10.10` |
+| Adresse IP | `10.2.41.10` |
 | Masque de sous-réseau | `255.255.255.0` |
-| Passerelle par défaut | `192.168.10.1` |
-| DNS préféré | `192.168.10.10` (boucle locale) |
+| Passerelle par défaut | `10.2.41.1` |
+| DNS préféré | `10.2.41.10` (boucle locale) |
 
 ### Vérification
 
@@ -153,9 +153,9 @@ Une fois le rôle installé, une notification dans le Gestionnaire de serveur in
 | Paramètre | Valeur |
 |---|---|
 | Option de déploiement | Ajouter une nouvelle forêt |
-| Nom de domaine racine | `technolab.local` |
+| Nom de domaine racine | `redone.local` |
 | Niveau fonctionnel | Windows Server 2016 (ou supérieur) |
-| Mot de passe DSRM | Saisir un mot de passe sécurisé |
+| Mot de passe DSRM | Serveur2022 |
 
 ![Assistant de promotion en contrôleur de domaine](images/image8.png)
 
