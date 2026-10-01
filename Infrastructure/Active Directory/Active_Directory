@@ -213,9 +213,9 @@ Les comptes utilisateurs ont été créés avec des identifiants standardisés (
 
 | Nom complet | Login | Mot de passe initial | Groupe |
 |---|---|---|---|
-| Alice Martin | `amartin` | `P@ssw0rd123` | G_Direction |
-| Hugo Bernard | `hbernard` | `P@ssw0rd123` | G_Compta |
-| Sarah Leroy | `sleroy` | `P@ssw0rd123` | G_IT |
+| Alice Martin | `amartin` | `P@ssw0rd123` | Direction |
+| Hugo Bernard | `hbernard` | `P@ssw0rd123` | Compta |
+| Sarah Leroy | `sleroy` | `P@ssw0rd123` | DSI |
 
 > **Note :** Le mot de passe initial sera changé à la première connexion.
 
