@@ -174,11 +174,20 @@ L'organisation des objets au sein de l'annuaire a été structurée via la conso
 ### Arborescence logique
 
 ```
-technolab.local
-├── Direction
-├── Comptabilite
-├── Informatique
-├── Utilisateurs
+redone.local
+
+├──service ├── Direction
+           ├── DSI
+           ├── RH
+           ├── Compta
+           ├── Juridique
+           ├── Secretaria Administratif
+           ├── Communication
+           ├── Redaction
+           ├── Developpement
+           ├── Commercial
+           ├── Labo-recherche
+           ├── Acceuil
 └── Postes
 ```
 
@@ -194,9 +203,9 @@ Trois groupes de sécurité globaux ont été créés :
 
 | Groupe | Description |
 |---|---|
-| `G_Direction` | Direction de l'entreprise |
-| `G_Compta` | Service comptable |
-| `G_IT` | Service informatique |
+| `Direction` | Direction de l'entreprise |
+| `Compta` | Service comptable |
+| `DSI` | Service informatique |
 
 ### Création des utilisateurs
 
