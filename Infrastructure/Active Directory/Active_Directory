@@ -217,6 +217,40 @@ Les comptes utilisateurs ont été créés avec des identifiants standardisés (
 | Hugo Bernard | `hbernard` | `P@ssw0rd123` | Compta |
 | Sarah Leroy | `sleroy` | `P@ssw0rd123` | DSI |
 
+Utilisation d'un script Powershell pour la création automatique : 
+foreach ($Utilisateur in $CSVData) {
+    $UtilisateurPrenom = $Utilisateur.Prenom
+    $UtilisateurNom = $Utilisateur.Nom
+    $UtilisateurLogin = ($UtilisateurPrenom).Substring(0,1) + "." + $UtilisateurNom
+    $UtilisateurEmail = "$UtilisateurLogin@redone.local"
+    $UtilisateurMotDePasse = "P@ssw0rd123"
+    $UtilisateurFonction = $Utilisateur.Fonction
+
+    # Vérifier la présence de l'utilisateur dans l'AD
+    if (Get-ADUser -Filter {SamAccountName -eq $UtilisateurLogin}) {
+        Write-Warning "L'identifiant $UtilisateurLogin existe déjà dans l'AD"
+    }
+    else {
+        New-ADUser -Name "$UtilisateurNom $UtilisateurPrenom" `
+            -DisplayName "$UtilisateurNom$UtilisateurPrenom" `
+            -GivenName $UtilisateurPrenom `
+            -Surname $UtilisateurNom `
+            -SamAccountName $UtilisateurLogin `
+            -UserPrincipalName "$UtilisateurLogin@redone.local" `
+            -EmailAddress $UtilisateurEmail `
+            -Title $UtilisateurFonction `
+            -Path "OU=Services,DC=redone,DC=local" `
+            -AccountPassword (ConvertTo-SecureString $UtilisateurMotDePasse -AsPlainText -Force) `
+            -ChangePasswordAtLogon $true `
+            -Enabled $true
+
+        Write-Output "Création de l'utilisateur : $UtilisateurLogin ($UtilisateurNom$UtilisateurPrenom)"
+    }
+}
+
+
+
+
 > **Note :** Le mot de passe initial sera changé à la première connexion.
 
 ![Création des comptes utilisateurs dans l'Active Directory](images/image10.png)
