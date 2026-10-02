@@ -262,16 +262,18 @@ foreach ($Utilisateur in $CSVData) {
 ### Configuration réseau du client
 
 La machine virtuelle CLIENT01 (Windows 10/11) doit être configurée sur le **même réseau virtuel** que le serveur. Son serveur DNS doit obligatoirement pointer vers l'adresse IP du contrôleur de domaine.
+Créer la VM sans parefeu et en la mettant dans le Bon VLAN. 
 
 | Paramètre | Valeur |
 |---|---|
-| Adresse IP | `192.168.10.20` |
+| Adresse IP | `10.2.41.20` |
 | Masque | `255.255.255.0` |
-| DNS | `192.168.10.10` |
+| Passerelle | `10.2.41.1` |
+| DNS | `10.2.41.10` |
 
 ### Test de connectivité
 
-Effectuer un `ping 192.168.10.10` depuis le client pour valider la communication réseau.
+Effectuer un `ping 10.2.41.10` depuis le client pour valider la communication réseau.
 
 ![Test ping entre le client et le serveur](images/image11.png)
 
@@ -280,9 +282,9 @@ Effectuer un `ping 192.168.10.10` depuis le client pour valider la communication
 1. Ouvrir les **Propriétés système** de la machine cliente
 2. Cliquer sur **Modifier** (renommer le PC en `CLIENT01` si nécessaire)
 3. Cocher la case **Domaine**
-4. Renseigner le nom : `technolab.local`
-5. Saisir les identifiants du compte `TECHNOLAB\Administrateur`
-6. Un message de bienvenue confirme la réussite
+4. Renseigner le nom : `redone.local`
+5. Saisir les identifiants du compte `redone\Administrateur`
+6. ajouter le compte utilisateur existant
 7. **Redémarrer** le poste
 
 ![Message de bienvenue confirmant la jonction au domaine](images/image12.jpg)
@@ -293,7 +295,7 @@ Effectuer un `ping 192.168.10.10` depuis le client pour valider la communication
 
 ### Connexion avec un compte domaine
 
-Au redémarrage du client, l'option **Autre utilisateur** permet de s'authentifier avec le compte domaine d'un employé, par exemple : `TECHNOLAB\amartin`.
+Au redémarrage du client, l'option **Autre utilisateur** permet de s'authentifier avec le compte domaine d'un employé, par exemple : `REDONE\amartin`.
 
 ![Connexion avec un compte domaine](images/image13.jpg)
 
@@ -329,7 +331,7 @@ Le poste client apparaît bien visible dans la console d'administration Active D
 |---|---|
 | `ipconfig /all` | Afficher la configuration réseau complète |
 | `ping 192.168.10.10` | Tester la connectivité réseau |
-| `nslookup technolab.local` | Résoudre le nom de domaine via DNS |
+| `nslookup redone.local` | Résoudre le nom de domaine via DNS |
 | `whoami` | Vérifier que l'utilisateur est bien un compte domaine |
 | `net view` | Lister les ressources partagées visibles sur le domaine |
 
@@ -341,7 +343,7 @@ Le poste client apparaît bien visible dans la console d'administration Active D
 
 **Problème :** Impossible de modifier le mot de passe d'un utilisateur depuis l'Active Directory.
 
-**Solution :** L'utilisateur était connecté avec la session locale créée lors de l'installation de Windows, avant la jonction au domaine. Il faut se connecter avec un compte domaine (`TECHNOLAB\amartin`) pour que les modifications s'appliquent correctement.
+**Solution :** L'utilisateur était connecté avec la session locale créée lors de l'installation de Windows, avant la jonction au domaine. Il faut se connecter avec un compte domaine (`REDONE\amartin`) pour que les modifications s'appliquent correctement.
 
 ---
 
