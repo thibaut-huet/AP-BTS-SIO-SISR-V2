@@ -1,0 +1,2 @@
+I) Installation d'un serveur DHCP sur le premier Active Directory pour que le deuxieme AD soit en DHCP et remplace l'adresse du premier s'il il tombe. 
+II) Installation de la deuxième VM windows serveur et configuration de l'AD secondaire
