@@ -1,2 +1,2 @@
-I) Installation d'un serveur DHCP sur le premier Active Directory pour que le deuxieme AD soit en DHCP et remplace l'adresse du premier s'il il tombe. 
+I) Installation d'un serveur DHCP sur le premier AD avec une plage attribué pour les client et serveur (plage entre 10.2.41.19 et 10.2.41.100). Les deux AD sont des exceptions en adresse fixe en 10.2.41.10 et 10.2.41.11 le serveur DNS indique que sis le DNS 10.2.41.10 est down il redirige ver le 10.2.41.11
 II) Installation de la deuxième VM windows serveur et configuration de l'AD secondaire
