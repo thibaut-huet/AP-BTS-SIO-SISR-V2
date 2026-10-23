@@ -266,7 +266,7 @@ Créer la VM sans parefeu et en la mettant dans le Bon VLAN.
 
 | Paramètre | Valeur |
 |---|---|
-| Adresse IP | `10.2.41.20` |
+| Adresse IP | `10.2.41.16` |
 | Masque | `255.255.255.0` |
 | Passerelle | `10.2.41.1` |
 | DNS | `10.2.41.10` |
@@ -286,7 +286,7 @@ Effectuer un `ping 10.2.41.10` depuis le client pour valider la communication r�
 5. Saisir les identifiants du compte `redone\Administrateur`
 6. ajouter le compte utilisateur existant
 7. **Redémarrer** le poste
-
+8. Tout passer en DHCP
 ![Message de bienvenue confirmant la jonction au domaine](images/image12.jpg)
 
 ---
