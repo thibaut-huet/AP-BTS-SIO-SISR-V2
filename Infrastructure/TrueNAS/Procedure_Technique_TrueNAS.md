@@ -83,15 +83,15 @@ Ce document détaille la procédure technique d'installation et de configuration
 
 ### Depuis la console
 
-- **Option 1** → Configure network interfaces → `ens33` → DHCP: No → Alias: `192.168.10.40/24`
+- **Option 1** → Configure network interfaces → `ens18` → DHCP: No → Alias: `10.2.41.12/24`
 - **Option 2** → Configure network settings
 
 | Paramètre | Valeur |
 |---|---|
 | Hostname | `truenas` |
-| Domain | `TECHNOLAB.local` |
-| Gateway | `192.168.10.1` |
-| DNS | `192.168.10.10` |
+| Domain | `REDONE.local` |
+| Gateway | `10.2.41.1` |
+| DNS | `10.2.41.10` |
 
 ![Configuration interface réseau](images/image8.png)
 
@@ -102,7 +102,7 @@ Ce document détaille la procédure technique d'installation et de configuration
 Ouvrir un navigateur sur le poste Windows :
 
 ```
-http://192.168.10.40
+http://10.2.41.12
 ```
 
 ![Interface web TrueNAS — connexion](images/image10.png)
