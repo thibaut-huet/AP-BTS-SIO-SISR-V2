@@ -31,14 +31,14 @@ Ce document détaille la procédure technique d'installation et de configuration
 | Système d'exploitation | TrueNAS Core / Scale |
 | RAM | 4 Go |
 | CPU | 2 vCPU |
-| Disque système | 16 Go (Virtuel) |
-| Disque de stockage | 50 Go (Virtuel) |
+| Disque système | 32 Go (Virtuel) |
+| Disque de stockage | 64 Go (Virtuel) |
 | Réseau | vmbr2 |
 
 ### Procédure
 
-1. Créer la VM avec un disque de 16 Go
-2. Modifier les paramètres de la VM pour ajouter un second disque de 50 Go
+1. Créer la VM avec un disque de 32 Go
+2. Modifier les paramètres de la VM pour ajouter un second disque de 64 Go
 3. Lancer la VM sur l'ISO TrueNAS
 
 ![Démarrage sur l'ISO TrueNAS](images/image13.png)
@@ -57,8 +57,8 @@ Ce document détaille la procédure technique d'installation et de configuration
 
 1. Démarrer sur l'ISO TrueNAS
 2. Écran d'accueil → sélectionner **Install/Upgrade**
-3. Choisir le disque de **16 Go** comme destination
-4. Définir le mot de passe administrateur
+3. Choisir le disque de **32 Go** comme destination
+4. Définir le mot de passe administrateur 
 5. Activer **EFI : Yes**
 6. Terminer l'installation → **Reboot System**
 
@@ -67,9 +67,9 @@ Ce document détaille la procédure technique d'installation et de configuration
 | Champ | Valeur |
 |---|---|
 | Identifiant | `truenas_admin` |
-| Mot de passe | `Serveur@)@@` |
+| Mot de passe | `root` |
 
-> **Note :** `Serveur@)@@` correspond à `Serveur2022` saisi en azerty → qwerty.
+
 
 ![Configuration du compte administrateur](images/image5.png)
 
