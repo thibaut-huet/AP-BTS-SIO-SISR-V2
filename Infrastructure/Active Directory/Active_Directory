@@ -280,8 +280,8 @@ Effectuer un `ping 10.2.41.10` depuis le client pour valider la communication r�
 ### Jonction au domaine
 
 1. Ouvrir les **Propriétés système** de la machine cliente
-2. Cliquer sur **Modifier** (renommer le PC en `CLIENT01` si nécessaire)
-3. Cocher la case **Domaine**
+2. renommer le PC en `CLIENT01` et démmarer
+3.retour a **Propriétés système** Cliquer sur **Modifier**  Cocher la case **Domaine**
 4. Renseigner le nom : `redone.local`
 5. Saisir les identifiants du compte `redone\Administrateur`
 6. ajouter le compte utilisateur existant
