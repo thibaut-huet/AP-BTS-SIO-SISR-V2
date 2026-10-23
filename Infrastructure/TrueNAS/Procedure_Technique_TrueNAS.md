@@ -1,23 +1,23 @@
 # Procédure Technique — Installation et Configuration de TrueNAS
 
 **Auteur :** Thibaut HUET  
-**Date :** Juin 2026  
-**Contexte :** Projet AP BTS SIO — Infrastructure GSB  
-**Document :** Doc_AP_1 — Procédure Technique
+**Date :** 23/10/2026 
+**Contexte :** Projet AP BTS SIO — Infrastructure REDONE
+**Document :** Procédure Technique
 
 ---
 
 ## Présentation du projet
 
-Ce document détaille la procédure technique d'installation et de configuration d'un serveur de stockage **TrueNAS** au sein de l'infrastructure **TechnoLab**. TrueNAS est intégré au domaine Windows Server Active Directory pour offrir un stockage centralisé et sécurisé à l'ensemble des utilisateurs.
+Ce document détaille la procédure technique d'installation et de configuration d'un serveur de stockage **TrueNAS** au sein de l'infrastructure **redone**. TrueNAS est intégré au domaine Windows Server Active Directory pour offrir un stockage centralisé et sécurisé à l'ensemble des utilisateurs.
 
 ### Plan d'adressage
 
 | Équipement | Rôle | Adresse IP |
 |---|---|---|
-| SRV-AD | Contrôleur de domaine | `192.168.10.10` |
-| TrueNAS | Serveur NAS | `192.168.10.40` |
-| CLIENT01 | Poste client | `192.168.10.20` |
+| SRV-AD | Contrôleur de domaine | `10.2.41.10` |
+| TrueNAS | Serveur NAS | `10.2.41.12` |
+| CLIENT01 | Poste client | `DHCP` |
 
 ---
 
@@ -27,13 +27,13 @@ Ce document détaille la procédure technique d'installation et de configuration
 
 | Paramètre | Valeur |
 |---|---|
-| Hyperviseur | VMware Workstation Player |
+| Hyperviseur | proxmox |
 | Système d'exploitation | TrueNAS Core / Scale |
 | RAM | 4 Go |
 | CPU | 2 vCPU |
 | Disque système | 16 Go (Virtuel) |
 | Disque de stockage | 50 Go (Virtuel) |
-| Réseau | NAT (192.168.10.0/24) |
+| Réseau | vmbr2 |
 
 ### Procédure
 
