@@ -268,7 +268,7 @@ Créer la VM sans parefeu et en la mettant dans le Bon VLAN.
 |---|---|
 | Adresse IP | `10.2.41.16` |
 | Masque | `255.255.255.0` |
-| Passerelle | `10.2.41.1` |
+| Passerelle | `Pas mettre de passerelle` | 
 | DNS | `10.2.41.10` |
 
 ### Test de connectivité
