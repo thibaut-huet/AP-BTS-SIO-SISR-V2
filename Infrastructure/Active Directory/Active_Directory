@@ -261,7 +261,7 @@ foreach ($Utilisateur in $CSVData) {
 
 ### Configuration réseau du client
 
-La machine virtuelle CLIENT01 (Windows 10/11) doit être configurée sur le **même réseau virtuel** que le serveur. Son serveur DNS doit obligatoirement pointer vers l'adresse IP du contrôleur de domaine.
+La machine virtuelle CLIENT01 (Windows 10/11) doit être configurée sur le **même réseau virtuel** que le serveur VLAN 400. Son serveur DNS doit obligatoirement pointer vers l'adresse IP du contrôleur de domaine.
 Créer la VM sans parefeu et en la mettant dans le Bon VLAN. 
 
 | Paramètre | Valeur |
