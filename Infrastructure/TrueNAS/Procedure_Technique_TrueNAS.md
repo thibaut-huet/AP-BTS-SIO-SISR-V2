@@ -230,14 +230,14 @@ Si une erreur type "this could be a dns misconfiguration" apparaît enlever la p
 Win+R → gpmc.msc → Entrée
 ```
 
-1. Clic droit sur `technolab.local` → **Créer un objet GPO** → Nom : `Lecteur-TrueNAS`
+1. Clic droit sur `redone.local` → **Créer un objet GPO** → Nom : `Lecteur-TrueNAS`
 2. **Modifier** → `Configuration utilisateur` → `Préférences` → `Paramètres Windows` → `Mappages de lecteurs`
 3. **Nouveau** → **Lecteur mappé**
 
 | Champ | Valeur |
 |---|---|
 | Action | Mettre à jour |
-| Emplacement | `\\192.168.10.40\Partage` |
+| Emplacement | `\\10.2.41.12\Partage` |
 | Reconnecter | ✅ |
 | Lettre | `Z:` |
 | Libellé | Partage TrueNAS |
