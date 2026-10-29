@@ -155,8 +155,8 @@ systemctl restart chronyd
 
 ## 7. Jonction au domaine Active Directory
 
-1. Interface web → **Identifiants** → **Services d'annuaire**
-2. Mode : **Active Directory**
+1. Interface web → **Identifiants** → **Services d'annuaire** -> configurer le service annuaire
+2. Mode : **Active Directory** 
 3. Paramètres :
 
 | Champ | Valeur |
@@ -164,7 +164,7 @@ systemctl restart chronyd
 | Type d'identifiant | Kerberos User |
 | Utilisateur | `Administrateur` |
 | Mot de passe | `Serveur2022` |
-| Domaine | `technolab.local` |
+| Domaine | `redone.local` |
 
 4. **Sauvegarder**
 
