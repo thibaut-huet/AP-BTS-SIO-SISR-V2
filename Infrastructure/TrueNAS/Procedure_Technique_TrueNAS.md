@@ -147,7 +147,7 @@ systemctl restart chronyd
 1. Serveur Windows → **Outils** → **DNS**
 2. Zones de recherche directes → `technolab.local`
 3. Clic droit → **Nouvel hôte (A)**
-4. Nom : `truenas` — IP : `192.168.10.40`
+4. Nom : `truenas` — IP : `10.2.41.12`
 
 ![Ajout de l'enregistrement DNS](images/image14.png)
 
