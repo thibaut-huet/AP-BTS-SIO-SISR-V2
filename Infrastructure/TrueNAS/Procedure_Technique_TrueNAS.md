@@ -151,6 +151,14 @@ systemctl restart chronyd
 
 ![Ajout de l'enregistrement DNS](images/image14.png)
 
+1. Zone de recherche inversé
+2. click droit nouvelle zone
+3. zone principale
+4. reste par default
+5. terminé
+6. click droit sur la zone créé en dessous de recherche inversé dans le menu de gauche
+7. pointeur (PTR) -> rentrer adresse de l'AD puis parcourir et chercher l'AD
+8. Même chose avec l'AD secondaire (nouveau pointeur sur la meme zone)
 ---
 
 ## 7. Jonction au domaine Active Directory
@@ -165,6 +173,8 @@ systemctl restart chronyd
 | Utilisateur | `Administrateur` |
 | Mot de passe | `Serveur2022` |
 | Domaine | `redone.local` |
+|nom hôte truenas | 'truenas_admin' |
+|nom de domaine | 'redone.local'|
 
 4. **Sauvegarder**
 
