@@ -175,6 +175,7 @@ systemctl restart chronyd
 | Domaine | `redone.local` |
 |nom hôte truenas | 'truenas_admin' |
 |nom de domaine | 'redone.local'|
+Si une erreur type "this could be a dns misconfiguration" apparaît enlever la passerelle dans la configuration réseau de truenas (renseigner que le DNS) 
 
 4. **Sauvegarder**
 
