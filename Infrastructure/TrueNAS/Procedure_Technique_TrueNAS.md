@@ -112,7 +112,7 @@ http://10.2.41.12
 ## 4. Synchronisation NTP
 
 Kerberos exige une synchronisation horaire à **moins de 5 minutes** entre TrueNAS et l'AD.
-
+On peut passer par la ligne de commande sur le serveur ou alors l'interface web dans systeme->general setting-> localization /setting
 ```bash
 # Shell TrueNAS (Option 8)
 date -s "2026-06-05 10:26:00"
