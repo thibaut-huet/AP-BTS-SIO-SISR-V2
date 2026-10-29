@@ -254,6 +254,7 @@ Win+R → gpmc.msc → Entrée
 
 ```batch
 gpupdate /force
+En cas de problème avec la GPO possibilité de passer par la création d'emplacement réseau directement sur le client.
 ```
 
 ---
