@@ -200,7 +200,7 @@ Si une erreur type "this could be a dns misconfiguration" apparaît enlever la p
 |---|---|
 | Chemin | `/mnt/datapool/partage` |
 | Nom | `Partage` |
-| Description | Partage commun technolab.local |
+| Description | Partage commun redone.local |
 
 2. **Enregistrer**
 
