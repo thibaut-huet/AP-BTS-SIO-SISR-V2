@@ -1,0 +1,138 @@
+name: AP_1 - Deploy Azure AD Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action a executer'
+        required: true
+        default: what-if
+        type: choice
+        options:
+          - what-if
+          - deploy
+      promoteDc:
+        description: 'Promouvoir la VM en controleur de domaine (phase 2)'
+        required: true
+        default: false
+        type: boolean
+      joinDomain:
+        description: 'Joindre la VM au domaine redone.local'
+        required: true
+        default: true
+        type: boolean
+  pull_request:
+    paths:
+      - 'bicep/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy-infra.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'bicep/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy-infra.yml'
+
+# OIDC : aucune cle secrete Azure n'est stockee dans GitHub.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ap1-deploy-adds
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+  PARAM_FILE: bicep/main.bicepparam
+  SCRIPTS_BASE_PATH: scripts
+
+jobs:
+  deploy:
+    name: Deploy AD DS infrastructure
+    runs-on: ubuntu-latest
+    environment: azure-lab
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group exists
+        run: |
+          az group create \
+            --name "$AZURE_RESOURCE_GROUP" \
+            --location "$AZURE_LOCATION" \
+            --tags project=AP-BTS-SIO-SISR owner="Thibaut HUET" managedBy=Bicep
+
+      - name: Build Bicep
+        run: az bicep build --file bicep/main.bicep --stdout > /dev/null
+
+      # Sur push/PR, promoteDc reste a false : la promotion (phase 2) est
+      # volontairement reservee a un lancement manuel workflow_dispatch.
+      - name: What-if
+        if: github.event_name == 'pull_request' || github.event.inputs.action == 'what-if'
+        env:
+          VM_ADMIN_PASSWORD: ${{ secrets.VM_ADMIN_PASSWORD }}
+          DOMAIN_JOIN_PASSWORD: ${{ secrets.DOMAIN_JOIN_PASSWORD }}
+          DSRM_PASSWORD: ${{ secrets.DSRM_PASSWORD }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          az deployment group what-if \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "adds-whatif-${{ github.run_number }}" \
+            --parameters "$PARAM_FILE" \
+              location="$AZURE_LOCATION" \
+              repositoryRawBaseUrl="https://raw.githubusercontent.com/${{ github.repository }}/main" \
+              scriptsBasePath="$SCRIPTS_BASE_PATH" \
+              promoteDc=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.promoteDc || 'false' }} \
+              joinDomain=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.joinDomain || 'true' }} \
+            --result-format FullResourcePayloads
+
+      - name: Deploy
+        if: github.event_name == 'push' || github.event.inputs.action == 'deploy'
+        env:
+          VM_ADMIN_PASSWORD: ${{ secrets.VM_ADMIN_PASSWORD }}
+          DOMAIN_JOIN_PASSWORD: ${{ secrets.DOMAIN_JOIN_PASSWORD }}
+          DSRM_PASSWORD: ${{ secrets.DSRM_PASSWORD }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "adds-${{ github.run_number }}" \
+            --parameters "$PARAM_FILE" \
+              location="$AZURE_LOCATION" \
+              repositoryRawBaseUrl="https://raw.githubusercontent.com/${{ github.repository }}/main" \
+              scriptsBasePath="$SCRIPTS_BASE_PATH" \
+              promoteDc=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.promoteDc || 'false' }} \
+              joinDomain=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.joinDomain || 'true' }} \
+            --output json
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "## AP_1 - Resultat du pipeline"
+            echo ""
+            echo "| Parametre | Valeur |"
+            echo "|---|---|"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Branche | \`${{ github.ref_name }}\` |"
+            echo "| Action | \`${{ github.event.inputs.action || github.event_name }}\` |"
+            echo "| Resource Group | \`$AZURE_RESOURCE_GROUP\` |"
+            echo ""
+            echo "Verifier ensuite sur le DC Azure :"
+            echo ""
+            echo '```powershell'
+            echo 'Get-Service NTDS, DNS, Netlogon'
+            echo 'repadmin /replsummary'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,32 @@
+# Secrets et fichiers locaux - ne jamais committer
+*.bicepparam.local
+*.local.bicepparam
+secrets.*
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Sorties de compilation Bicep / ARM
+# Ne jamais committer main.json / *.parameters.json : ils peuvent contenir
+# les valeurs résolues des paramètres, y compris des secrets.
+*.json
+!bicepconfig.json
+
+# Journaux et rapports
+*.log
+*.trx
+TestResults/
+
+# Editeurs et systeme
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Divers
+*.tmp
+*.bak

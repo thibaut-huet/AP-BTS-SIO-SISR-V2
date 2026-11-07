@@ -1,0 +1,41 @@
+name: AP_1 - Validate Bicep
+
+# Ce workflow est la copie ACTIVE dans le depot AP-BTS-SIO-SISR-V2.
+# GitHub Actions ne lit que le dossier .github/workflows de la RACINE.
+# La version autonome se trouve dans AP_1/.github/workflows/.
+
+on:
+  pull_request:
+    paths:
+      - 'AP_1/bicep/**'
+      - '.github/workflows/ap1-validate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'AP_1/bicep/**'
+      - '.github/workflows/ap1-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build and lint AP_1 Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: |
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ./bicep
+          sudo mv ./bicep /usr/local/bin/bicep
+          bicep --version
+
+      - name: Build main.bicep
+        run: bicep build AP_1/bicep/main.bicep --stdout > /dev/null
+
+      - name: Lint main.bicep
+        run: bicep lint AP_1/bicep/main.bicep
