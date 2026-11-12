@@ -66,6 +66,8 @@ Le rôle `Contributor` sur `rg-redone-adds-lab` est suffisant pour ce livrable.
 
 - Changer de région (`westeurope` → `francecentral`) ou de taille
   (`Standard_B2ms` → `Standard_B2s`).
+- Penser à supprimer les VM orphelines : un abonnement gratuit est typiquement
+  limité à **4 vCPU régionaux**, pas à un nombre de VM (`README.md` §4.2).
 - Vérifier les quotas :
 
 ```bash

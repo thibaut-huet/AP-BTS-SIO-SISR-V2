@@ -38,6 +38,11 @@ rétrogradation du contrôleur de domaine Proxmox.
 - [ ] Azure CLI 2.50+ et Bicep CLI.
 - [ ] Droits pour créer un resource group et attribuer un rôle.
 - [ ] Quota suffisant pour une `Standard_B2ms` dans la région choisie.
+- [ ] **Quota vCPU régional vérifié** :
+  `az vm list-usage --location westeurope -o table | grep -i "Total Regional"`.
+  Un abonnement gratuit est typiquement limité à 4 vCPU : c'est suffisant pour
+  le DC (`B2ms`, 2 vCPU), pas pour un DC + un client Windows (voir `README.md`
+  §4.2).
 
 ### 1.3. Côté GitHub
 

@@ -7,6 +7,11 @@ Active Directory pendant toute la durée de la migration, tandis qu'un nouveau
 contrôleur de domaine est déployé dans Azure. Les deux sites communiquent via un
 réseau privé overlay **Tailscale** (WireGuard).
 
+> Le **maintien d'AD DS** (plutôt qu'une bascule Entra ID / Intune), les cas
+> réels où cette migration reste pertinente et la perspective d'évolution sont
+> argumentés dans `README.md` §3. Le **périmètre** et les **contraintes de
+> quota** de l'abonnement sont détaillés dans `README.md` §4.
+
 ```mermaid
 flowchart TB
     subgraph ONPREM["Site Proxmox - 10.2.41.0/24"]
@@ -283,6 +288,19 @@ Resolve-DnsName redone.local
   public, ou utiliser un compte de stockage avec SAS.
 - Le pipeline applique les changements sur `main` : en production, ajouter une
   approbation manuelle (environnement protégé) et un `what-if` obligatoire.
+- **Quota** : l'abonnement de démonstration est limité en vCPU régionaux
+  (typiquement 4). Azure ne limite pas un nombre de VM mais un total de vCPU,
+  ce qui contraint à une seule VM dans le déploiement principal. Détail et
+  combinaisons possibles : `README.md` §4.2.
+- **Poste client** : un client Windows dans Azure consommerait le reste du
+  quota, et les images Windows client ne sont pas disponibles sur toutes les
+  offres. Le client de démonstration est donc un client Linux léger ou le poste
+  Proxmox existant, authentifié via Tailscale (`README.md` §4.2).
+- **Stockage** : `TRUENAS-01` n'est pas migré. Azure Files est la cible
+  proposée (SMB, ACL NTFS, authentification AD DS) mais reste hors périmètre
+  (`README.md` §4.3).
+- **Cloud natif** : la cible Entra ID + Intune n'est pas traitée ; elle est
+  documentée en perspective avec ses critères de bascule (`README.md` §3.4).
 
 ---
 
@@ -293,7 +311,12 @@ Resolve-DnsName redone.local
    sortante directe.
 3. Ajouter **Azure Bastion** pour l'administration sans Tailscale.
 4. Migrer le DHCP vers Azure (ou le conserver sur site selon le besoin).
-5. Ajouter **Azure Backup** et des tests de restauration.
-6. Ajouter **Azure Monitor / Log Analytics** pour les journaux AD.
-7. Étendre le pipeline avec `what-if` obligatoire, tests Pester et analyse
+5. Remplacer `TRUENAS-01` par **Azure Files** (authentification AD DS, snapshots
+   de partage, redondance LRS/ZRS) — voir `README.md` §4.3.
+6. Bascule vers **Entra ID + Intune** : Entra Connect, remplacement des GPO,
+   Entra Domain Services pour les applications legacy, puis décommissionnement
+   d'AD DS — voir `README.md` §3.4.
+7. Ajouter **Azure Backup** et des tests de restauration.
+8. Ajouter **Azure Monitor / Log Analytics** pour les journaux AD.
+9. Étendre le pipeline avec `what-if` obligatoire, tests Pester et analyse
    `bicep lint` en pré-commit.

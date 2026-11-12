@@ -118,6 +118,14 @@ du portail Azure.
 
 - Un seul DC dans Azure : ce n'est pas une haute disponibilité cloud complète.
 - Le DHCP n'est pas migré.
+- **Quota** : l'abonnement de démonstration limite le total de vCPU régionaux
+  (typiquement 4), pas un nombre de VM. Le déploiement principal tient donc sur
+  une seule VM ; le poste client est un client Linux léger ou le poste Proxmox
+  existant (`README.md` §4.2).
+- **Stockage** : `TRUENAS-01` n'est pas migré ; Azure Files est proposé mais
+  hors périmètre (`README.md` §4.3).
+- **Cloud natif** : la bascule vers Entra ID + Intune est une perspective
+  documentée, non déployée (`README.md` §3.4).
 - Les scripts d'extension sont téléchargés depuis GitHub : dépôt public ou
   stockage avec SAS nécessaire.
 - Le pipeline applique automatiquement sur `main` : acceptable en laboratoire,
