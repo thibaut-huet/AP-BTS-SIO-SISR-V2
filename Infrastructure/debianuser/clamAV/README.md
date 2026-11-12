@@ -62,7 +62,6 @@ flowchart LR
 ```text
 ├── images/                         # Captures d'écran des manipulations
 ├── procedure_bts_sio_clamav.md     # Fiche de procédure technique complète
-├── procedure_bts_sio_clamav.pdf    # Rapport PDF officiel pour le BTS SIO
 └── README.md                       # Présentation synthétique du projet
 ```
 
