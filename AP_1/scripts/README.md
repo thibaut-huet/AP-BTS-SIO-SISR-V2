@@ -8,8 +8,8 @@
 | `02-join-domain.ps1` | en secours si la jonction échoue | non (l'extension native est utilisée) |
 | `03-promote-dc.ps1` | phase 2 de la migration | oui (extension `03-PromoteDC`) |
 | `04-validate-replication.ps1` | après le redémarrage de promotion | manuel |
-| `05-transfer-fsmo.ps1` | après validation de la réplication | manuel, avec confirmation |
-| `06-demote-onprem-dc.ps1` | sur `SRV-AD`, après transfert FSMO | manuel, avec confirmation |
+| `05-transfer-fsmo.ps1` | après validation de la réplication | manuel ; **optionnel**, mode vérification par défaut, `-ExecuteTransfer` pour agir |
+| `06-demote-onprem-dc.ps1` | sur `SRV-AD`, après transfert FSMO | manuel ; **optionnel**, mode vérification par défaut, `-ExecuteDemotion` pour agir |
 
 ## Clients (`clients/`)
 

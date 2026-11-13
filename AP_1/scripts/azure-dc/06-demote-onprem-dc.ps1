@@ -1,22 +1,42 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Retrograde proprement un controleur de domaine (a executer sur le DC
-    Proxmox, apres transfert des roles FSMO vers le DC Azure).
+    Verifie (par defaut) ou realise (option) la retrogradation d'un controleur
+    de domaine, a executer sur le DC Proxmox.
 
 .DESCRIPTION
+    Par defaut, ce script ne modifie RIEN : il controle l'etat du serveur, liste
+    les roles FSMO qu'il detient encore et affiche la marche a suivre. C'est le
+    mode "verification", sans risque.
+
+    La retrogradation reelle (desinstallation d'AD DS, passage en serveur
+    membre, redemarrage) n'a lieu qu'avec -ExecuteDemotion. Ce choix permet de
+    rejouer la migration plusieurs fois (demonstration, soutenance) sans
+    detruire l'infrastructure Proxmox de reference : l'ancien DC reste
+    operationnel, il suffit de supprimer le DC Azure et de redeployer.
+
     Ce script refuse de demettre le serveur si des roles FSMO y sont encore
-    actifs, sauf avec -Force. Il desinstalle AD DS, DNS et demote le serveur
-    en simple serveur membre, puis redemarre.
+    actifs, sauf avec -Force.
 
     A ne PAS executer sur le DC Azure tant que la migration n'est pas validee.
 
 .EXAMPLE
-    .\06-demote-onprem-dc.ps1 -WhatIf
+    # Mode verification (aucune modification) - recommande
     .\06-demote-onprem-dc.ps1
+
+.EXAMPLE
+    # Simulation detaillee de la retrogradation
+    .\06-demote-onprem-dc.ps1 -ExecuteDemotion -WhatIf
+
+.EXAMPLE
+    # Retrogradation reelle : action irreversible
+    .\06-demote-onprem-dc.ps1 -ExecuteDemotion
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
+    [alias('Demote')]
+    [switch]$ExecuteDemotion,
+
     [switch]$Force
 )
 
@@ -34,6 +54,14 @@ function Write-Log {
 
 try {
     Start-Transcript -Path (Join-Path $logDir '06-demote-dc-transcript.log') -Append | Out-Null
+
+    # Idempotence : si NTDS n'existe pas, le serveur n'est pas (ou plus) un DC.
+    $isDc = (Get-Service -Name NTDS -ErrorAction SilentlyContinue) -ne $null
+    if (-not $isDc) {
+        Write-Log "Ce serveur n'heberge pas AD DS (service NTDS absent) : rien a retrogarder."
+        exit 0
+    }
+
     Import-Module ActiveDirectory -ErrorAction Stop
 
     # Les proprietes FSMO de Get-ADDomain/Get-ADForest renvoient un FQDN :
@@ -49,6 +77,24 @@ try {
     if ($forest.SchemaMaster -eq $me) { $localFsmo += 'SchemaMaster' }
     if ($forest.DomainNamingMaster -eq $me) { $localFsmo += 'DomainNamingMaster' }
 
+    Write-Log "Etat du serveur $me :"
+    Write-Log "  Roles FSMO detenus localement : $(if ($localFsmo.Count -gt 0) { $localFsmo -join ', ' } else { 'aucun' })"
+    Write-Log "  PDC Emulator : $($domain.PDCEmulator)"
+    Write-Log "  RID Master   : $($domain.RIDMaster)"
+    Write-Log "  Schema Master: $($forest.SchemaMaster)"
+
+    # Mode par defaut : audit seul, aucune modification.
+    if (-not $ExecuteDemotion) {
+        Write-Log 'MODE VERIFICATION : aucune modification appliquee.'
+        Write-Log 'Avant une retrogradation reelle, verifier sur le DC Azure :'
+        Write-Log '  repadmin /replsummary   (0 echec)'
+        Write-Log '  dcdiag /test:replications /test:dns'
+        Write-Log '  \\redone.local\SYSVOL accessible'
+        Write-Log 'Pour retrograder reellement : .\06-demote-onprem-dc.ps1 -ExecuteDemotion'
+        Write-Log 'Rappel : la retrogradation est irreversible et empeche de rejouer la migration.'
+        exit 0
+    }
+
     if ($localFsmo.Count -gt 0) {
         $message = "Ce serveur detient encore les roles FSMO : $($localFsmo -join ', ')."
         if (-not $Force) {
@@ -58,7 +104,6 @@ try {
     }
 
     Write-Log "Retrogradation de $me. Le serveur deviendra un simple serveur membre."
-    Write-Log 'Verifier au prealable que le DC Azure est sain : repadmin /replsummary, dcdiag, SYSVOL partage.'
 
     if ($PSCmdlet.ShouldProcess($me, 'Desinstaller AD DS et retrograder le controleur de domaine')) {
         # -DemoteOperationMasterRole:$false : refuse de saisir les roles FSMO

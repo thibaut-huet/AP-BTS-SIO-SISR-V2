@@ -380,11 +380,18 @@ laisser le DC s'enregistrer dynamiquement.
 - Vérifier que le DC cible est en ligne et répliqué.
 - Vérifier que le compte est `Domain Admins` / `Enterprise Admins` (schéma).
 - Vérifier les journaux `Directory Service`.
+- Rappel : `05-transfer-fsmo.ps1` est en **mode vérification par défaut** ; le
+  transfert réel exige `-ExecuteTransfer`.
 
 ### 8.2. `Uninstall-ADDSDomainController` refuse
 
 Le script `06` bloque si des rôles FSMO sont encore sur le serveur. C'est
 volontaire. Transférer les rôles avec `05`, puis relancer.
+
+> Par défaut, `06-demote-onprem-dc.ps1` s'exécute **en mode vérification** et
+> ne modifie rien : la rétrogradation réelle exige `-ExecuteDemotion`. C'est
+> volontaire, pour pouvoir rejouer la migration sans détruire le DC de
+> référence.
 
 ### 8.3. Le DC a été rétrogradé mais les clients ne s'authentifient plus
 

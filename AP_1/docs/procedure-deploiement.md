@@ -16,9 +16,13 @@ rétrogradation du contrôleur de domaine Proxmox.
 | 1 | Déployer l'infrastructure et joindre le domaine | `promoteDc=false` |
 | 2 | Promouvoir le DC Azure | `promoteDc=true` |
 | 3 | Valider AD, DNS et réplication | `repadmin`, `dcdiag` |
-| 4 | Transférer les rôles FSMO | script `05` |
-| 5 | Rétrograder l'ancien DC et ajuster le réseau | script `06` |
+| 4 | Transférer les rôles FSMO (optionnel) | script `05` |
+| 5 | Rétrograder l'ancien DC (optionnel) et ajuster le réseau | script `06` |
 | 6 | Nettoyer / arrêter les coûts | désallouer ou supprimer |
+
+> Les phases 4 et 5 sont **optionnelles** et s'exécutent **en mode vérification
+> par défaut** (aucune modification sans `-ExecuteTransfer` / `-ExecuteDemotion`).
+> Pour rejouer la démonstration en boucle, ne pas les exécuter : voir §11.4.
 
 ---
 
@@ -444,16 +448,25 @@ Résultats attendus :
 
 ---
 
-## 8. Phase 4 - Transférer les rôles FSMO
+## 8. Phase 4 - Transférer les rôles FSMO (optionnelle)
+
+> **Étape optionnelle, désactivée par défaut.** Le script `05` s'exécute en
+> **mode vérification** : il affiche les détenteurs actuels et les rôles qui
+> seraient transférés, sans rien modifier. Le transfert réel exige
+> `-ExecuteTransfer`. Pour une démonstration rejouable, laisser les FSMO sur le
+> DC Proxmox et passer directement au nettoyage (§11.4).
 
 À exécuter depuis le **DC Azure**, après validation de la réplication.
 
 ```powershell
-# Simulation
-.\05-transfer-fsmo.ps1 -WhatIf
+# Mode vérification : audit seul, aucune modification (défaut)
+.\05-transfer-fsmo.ps1
+
+# Simulation du transfert réel
+.\05-transfer-fsmo.ps1 -ExecuteTransfer -WhatIf
 
 # Transfert réel
-.\05-transfer-fsmo.ps1
+.\05-transfer-fsmo.ps1 -ExecuteTransfer
 ```
 
 Vérifier :
@@ -470,7 +483,14 @@ Les 5 rôles doivent pointer vers `SRV-AD-AZ01`.
 
 ---
 
-## 9. Phase 5 - Rétrograder l'ancien DC
+## 9. Phase 5 - Rétrograder l'ancien DC (optionnelle)
+
+> **Étape optionnelle, désactivée par défaut.** La rétrogradation est
+> irréversible et empêche de rejouer la migration : elle convient à une
+> fermeture réelle du site Proxmox, pas à une démonstration. Pour rejouer la
+> migration, s'arrêter après la phase 4, supprimer le resource group Azure et
+> redéployer. Les scripts de cette phase ne modifient rien sans
+> `-ExecuteDemotion`.
 
 ### 9.1. Sauvegarder l'état système de `SRV-AD`
 
@@ -486,14 +506,17 @@ Get-ADDomain | Select-Object PDCEmulator, RIDMaster, InfrastructureMaster
 Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
 ```
 
-### 9.3. Rétrograder
+### 9.3. Contrôler, puis rétrograder
 
 ```powershell
-# Simulation
-.\06-demote-onprem-dc.ps1 -WhatIf
-
-# Rétrogradation réelle
+# Mode vérification : audit seul, aucune modification (défaut)
 .\06-demote-onprem-dc.ps1
+
+# Simulation de la rétrogradation réelle
+.\06-demote-onprem-dc.ps1 -ExecuteDemotion -WhatIf
+
+# Rétrogradation réelle : action irréversible
+.\06-demote-onprem-dc.ps1 -ExecuteDemotion
 ```
 
 Le serveur redevient un simple serveur membre et redémarre.
@@ -528,8 +551,14 @@ Avant suppression :
 
 - [ ] sauvegarde de l'état système du DC Azure ;
 - [ ] export des journaux de validation (`04-replication-report.txt`) ;
+- [ ] **rôles FSMO ramenés sur `SRV-AD`** si la migration doit être rejouée
+  (voir 11.4) ;
 - [ ] révocation de la clé Tailscale utilisée ;
 - [ ] suppression de l'app registration OIDC si elle n'est plus utilisée.
+
+> Supprimer le resource group sans ramener les FSMO laisserait le domaine avec
+> des rôles pointant vers un DC disparu : il faudrait alors les **saisir**
+> (`Seize`), opération risquée. C'est précisément ce qu'évite la procédure 11.4.
 
 ---
 
@@ -560,6 +589,71 @@ Avant suppression :
   DC et de laisser la réplication converger.
 - Documenter l'incident : c'est un excellent retour d'expérience pour le jury.
 
+### 11.4. Rejouer la démonstration (reset)
+
+Objectif : refaire la migration plusieurs fois sans toucher à l'infrastructure
+Proxmox de référence. **Ne jamais rétrograder `SRV-AD`** dans ce cas.
+
+Avec `05` et `06` en mode vérification par défaut, la boucle se réduit à :
+supprimer le resource group, nettoyer l'objet DC orphelin, redéployer. L'étape 1
+ne sert que si un transfert FSMO réel a été exécuté (option `-ExecuteTransfer`).
+
+1. **Ramener les rôles FSMO sur `SRV-AD` — seulement si un transfert réel a eu
+   lieu.** Depuis `SRV-AD` (ou via une session avec le module ActiveDirectory) :
+
+   ```powershell
+   Move-ADDirectoryServerOperationMasterRole `
+       -Identity 'SRV-AD' `
+       -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster `
+       -Confirm:$false
+   ```
+
+2. **Vérifier** que les 5 rôles pointent de nouveau vers `SRV-AD` :
+
+   ```powershell
+   Get-ADDomain | Select-Object PDCEmulator, RIDMaster, InfrastructureMaster
+   Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
+   ```
+
+3. **Supprimer le laboratoire Azure** :
+
+   ```bash
+   az group delete --name rg-redone-adds-lab --yes --no-wait
+   ```
+
+4. **Nettoyer les métadonnées du DC disparu.** Une suppression de VM sans
+   rétrogradation laisse un objet DC orphelin dans l'annuaire (erreurs de
+   réplication). Le supprimer proprement :
+
+   ```powershell
+   # Depuis SRV-AD : supprimer l'objet ordinateur et son compte de DC
+   Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'" | Remove-ADComputer -Confirm:$false
+   ```
+
+   Si l'objet `NTDS Settings` subsiste, utiliser `ntdsutil` :
+   `metadata cleanup` → `select operation target` → sélectionner le DC →
+   `remove selected server`.
+
+5. **Redéployer** via le pipeline (`promoteDc=false` puis `true`) ou
+   `az deployment group create` : la réplication repart de `SRV-AD`, resté
+   intact. Le script `05` est idempotent et ne déplace que les rôles qui ne sont
+   pas déjà sur la cible.
+
+Exemple de boucle complète (PowerShell, avec GitHub CLI) :
+
+```bash
+for i in 1 2 3; do
+  az group delete -n rg-redone-adds-lab --yes --no-wait
+  gh workflow run ap1-deploy-infra.yml -f action=deploy -f promoteDc=false
+  echo "Déploiement $i lancé"
+done
+```
+
+> Tant que les FSMO n'ont pas été ramenées sur `SRV-AD`, ne pas supprimer le
+> resource group : elles resteraient rattachées à un DC inexistant. C'est
+> précisément ce qu'évite le mode vérification par défaut des scripts `05` et
+> `06`.
+
 ---
 
 ## 12. Checklist finale pour la soutenance
@@ -573,6 +667,9 @@ Avant suppression :
 - [ ] `dcdiag` : tests de réplication/DNS OK.
 - [ ] Sites AD `Site-Proxmox` et `Site-Azure` configurés.
 - [ ] `SYSVOL` et `NETLOGON` partagés.
-- [ ] Transfert FSMO vérifié.
-- [ ] Rétrogradation documentée avec captures.
+- [ ] Transfert FSMO **vérifié** (mode vérification par défaut,
+  `-ExecuteTransfer` pour l'action réelle).
+- [ ] Rétrogradation **documentée** (optionnelle : mode vérification par défaut,
+  `-ExecuteDemotion` pour l'action réelle) avec captures.
+- [ ] Resource group Azure supprimé après la démonstration (si migration rejouable).
 - [ ] Rapport `04-replication-report.txt` archivé.

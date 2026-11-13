@@ -101,8 +101,15 @@ Promotion en DC additionnel
         ↓
 Réplication native (NTDS + SYSVOL + DNS)
         ↓
-Transfert FSMO puis rétrogradation de l'ancien DC
+Transfert FSMO (optionnel, désactivé par défaut)
+        ↓
+Rétrogradation de l'ancien DC (optionnelle, désactivée par défaut)
 ```
+
+> Les deux dernières étapes ne sont pas exécutées dans une démonstration
+> rejouable : elles modifieraient l'annuaire de référence. Les scripts `05` et
+> `06` s'exécutent en mode vérification et exigent `-ExecuteTransfer` /
+> `-ExecuteDemotion` pour agir.
 
 ---
 
@@ -301,6 +308,10 @@ Resolve-DnsName redone.local
   (`README.md` §4.3).
 - **Cloud natif** : la cible Entra ID + Intune n'est pas traitée ; elle est
   documentée en perspective avec ses critères de bascule (`README.md` §3.4).
+- **Transfert FSMO et rétrogradation de l'ancien DC** : optionnels et
+  désactivés par défaut (`05-transfer-fsmo.ps1` sans `-ExecuteTransfer`,
+  `06-demote-onprem-dc.ps1` sans `-ExecuteDemotion` = audit seul), afin de
+  pouvoir rejouer la migration sans détruire l'infrastructure Proxmox.
 
 ---
 

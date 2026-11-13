@@ -1,20 +1,46 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Transfere les 5 roles FSMO vers le controleur de domaine Azure.
+    Verifie (par defaut) ou realise (option) le transfert des 5 roles FSMO vers
+    le controleur de domaine Azure.
 
 .DESCRIPTION
-    A executer DEPUIS le DC Azure, apres validation de la replication
-    (script 04) et avant la retrogradation du DC Proxmox (script 06).
+    Par defaut, ce script ne deplace RIEN : il affiche qui detient les roles
+    FSMO et lesquels seraient transferes. C'est le mode "verification".
+
+    Le transfert reel n'a lieu qu'avec -ExecuteTransfer. Ce choix permet de
+    rejouer la migration en boucle (demonstration, soutenance) sans modifier
+    l'annuaire de reference : les FSMO restent sur le DC Proxmox, on supprime le
+    DC Azure et on redeploie.
 
     Le transfert est propre : les roles sont deplaces, pas saisis (seized).
+    Le script est idempotent : il ne deplace que les roles qui ne sont pas deja
+    sur le DC cible.
+
+    A executer DEPUIS le DC Azure, apres validation de la replication
+    (script 04).
 
 .EXAMPLE
+    # Mode verification (aucune modification) - recommande
     .\05-transfer-fsmo.ps1
-    .\05-transfer-fsmo.ps1 -TargetDC SRV-AD-AZ01
+
+.EXAMPLE
+    # Simulation detaillee du transfert
+    .\05-transfer-fsmo.ps1 -ExecuteTransfer -WhatIf
+
+.EXAMPLE
+    # Transfert reel vers le DC courant
+    .\05-transfer-fsmo.ps1 -ExecuteTransfer
+
+.EXAMPLE
+    # Transfert reel vers un DC explicite
+    .\05-transfer-fsmo.ps1 -ExecuteTransfer -TargetDC SRV-AD-AZ01
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
+    [alias('Transfer')]
+    [switch]$ExecuteTransfer,
+
     [string]$TargetDC = $env:COMPUTERNAME
 )
 
@@ -39,8 +65,8 @@ try {
 
     $domain = Get-ADDomain
     $forest = Get-ADForest
-    Write-Log "Avant transfert - PDC : $($domain.PDCEmulator), RID : $($domain.RIDMaster), Infrastructure : $($domain.InfrastructureMaster)"
-    Write-Log "Avant transfert - Schema : $($forest.SchemaMaster), DomainNaming : $($forest.DomainNamingMaster)"
+    Write-Log "Etat actuel - PDC : $($domain.PDCEmulator), RID : $($domain.RIDMaster), Infrastructure : $($domain.InfrastructureMaster)"
+    Write-Log "Etat actuel - Schema : $($forest.SchemaMaster), DomainNaming : $($forest.DomainNamingMaster)"
 
     # Ne deplacer que les roles encore detenus par un autre DC (idempotence).
     $rolesToMove = @()
@@ -52,8 +78,20 @@ try {
 
     if ($rolesToMove.Count -eq 0) {
         Write-Log 'Tous les roles FSMO sont deja detenus par le DC cible.'
+        exit 0
     }
-    elseif ($PSCmdlet.ShouldProcess($target.Name, "Transferer les roles FSMO : $($rolesToMove -join ', ')")) {
+
+    # Mode par defaut : audit seul, aucune modification.
+    if (-not $ExecuteTransfer) {
+        Write-Log "MODE VERIFICATION : aucune modification appliquee."
+        Write-Log "Roles qui seraient transferes vers $($target.Name) : $($rolesToMove -join ', ')"
+        Write-Log 'Avant un transfert reel, verifier la replication : repadmin /replsummary (0 echec).'
+        Write-Log 'Pour transferer reellement : .\05-transfer-fsmo.ps1 -ExecuteTransfer'
+        Write-Log 'Rappel : pour une demonstration rejouable, laisser les FSMO sur le DC Proxmox.'
+        exit 0
+    }
+
+    if ($PSCmdlet.ShouldProcess($target.Name, "Transferer les roles FSMO : $($rolesToMove -join ', ')")) {
         Move-ADDirectoryServerOperationMasterRole `
             -Identity $target.Name `
             -OperationMasterRole $rolesToMove `

@@ -71,7 +71,8 @@ du portail Azure.
 - Contrôle des rôles FSMO.
 - Vérification du partage `SYSVOL` / `NETLOGON`.
 - Analyse des journaux d'extensions et de `dcpromo.log`.
-- Procédure de transfert FSMO et de rétrogradation.
+- Procédure de transfert FSMO et de rétrogradation (toutes deux optionnelles,
+  en mode vérification par défaut : `-ExecuteTransfer` / `-ExecuteDemotion`).
 
 **Preuves :** scripts `04`, `05`, `06`, rapport texte, captures.
 
@@ -146,7 +147,11 @@ du portail Azure.
 - [ ] `repadmin /replsummary` avec 0 échec.
 - [ ] `dcdiag` (extrait).
 - [ ] Sites AD et sous-réseaux.
-- [ ] Transfert FSMO avant/après.
-- [ ] Rétrogradation de `SRV-AD`.
+- [ ] Transfert FSMO : **optionnel** (mode vérification par défaut,
+  `-ExecuteTransfer` pour l'action réelle) — captures du mode vérification
+  suffisantes si la démonstration doit rester rejouable.
+- [ ] Rétrogradation de `SRV-AD` : **optionnelle** (mode vérification par
+  défaut, `-ExecuteDemotion` pour l'action réelle) — captures du mode
+  vérification suffisantes si la démonstration doit rester rejouable.
 - [ ] Partage SMB TrueNAS accessible.
 - [ ] Rapport `04-replication-report.txt`.
