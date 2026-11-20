@@ -5,7 +5,7 @@
 // ============================================================================
 using './main.bicep'
 
-param location = 'francecentral'
+param location = 'polandcentral'
 param workloadName = 'redone'
 param environment = 'lab'
 
