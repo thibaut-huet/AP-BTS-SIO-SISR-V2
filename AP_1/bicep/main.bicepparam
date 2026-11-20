@@ -20,7 +20,7 @@ param deployTailscale = true
 
 // VM
 param vmName = 'SRV-AD-AZ01'
-param vmSize = 'Standard_B2ms'
+param vmSize = 'Standard_D2as_v4'
 param privateIpAddress = '10.3.1.4'
 param osDiskSizeGb = 127
 param imageSku = '2022-datacenter-g2'
