@@ -38,19 +38,43 @@ az bicep build --file AP_1/bicep/main.bicep --stdout > /dev/null
 az bicep lint --file AP_1/bicep/main.bicep
 ```
 
-### 2.2. `AADSTS70021: No matching federated identity record found`
+### 2.2. `AADSTS70021` / `AADSTS700213: No matching federated identity record`
 
 Le sujet OIDC ne correspond pas. Vérifier :
 
 - le nom de l'environnement GitHub (`azure-lab`) ;
-- le sujet exact : `repo:<owner>/<repo>:environment:azure-lab` ;
+- le sujet exact présenté dans le log du run (ligne `subject claim - ...`) ;
 - l'audience : `api://AzureADTokenExchange`.
 
-Lister les fédérations :
+**Identifiants immuables** : les dépôts récents présentent un sujet de la forme
+`repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:azure-lab`. Le credential
+Azure doit contenir **exactement** cette chaîne, identifiants inclus.
 
 ```bash
+# Vérifier le préfixe utilisé par le dépôt
+curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/repos/thibaut-huet/AP-BTS-SIO-SISR-V2/actions/oidc/customization/sub
+
+# Lister les fédérations
 az ad app federated-credential list --id "$APP_ID" -o table
 ```
+
+Corriger la fédération (exemple pour ce dépôt) :
+
+```bash
+az ad app federated-credential update \
+  --id "$APP_ID" \
+  --federated-credential-id "github-env-azure-lab" \
+  --parameters '{
+    "name": "github-env-azure-lab",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:thibaut-huet@286593076/AP-BTS-SIO-SISR-V2@1387710223:environment:azure-lab",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+```
+
+> Garder l'ancienne fédération le temps de valider la nouvelle, puis la
+> supprimer. La propagation peut prendre quelques minutes.
 
 ### 2.3. `AuthorizationFailed` / `The client does not have authorization`
 
@@ -74,15 +98,61 @@ Le rôle `Contributor` sur `rg-redone-adds-lab` est suffisant pour ce livrable.
 az vm list-usage --location westeurope -o table
 ```
 
-### 2.5. `InvalidParameter: adminPassword`
+### 2.5. `AADSTS700016` / `Application with identifier '$APP_ID' was not found`
 
-Le mot de passe ne respecte pas la complexité Windows Server :
+Le champ GitHub contient la **chaîne littérale** `$APP_ID` au lieu de la
+valeur GUID. Les champs GitHub ne sont pas un shell : ils ne développent
+aucune variable.
 
-- 12 caractères minimum (le paramètre Bicep impose `minLength(12)`) ;
+Vérifier la valeur de `AZURE_CLIENT_ID` :
+
+- elle doit ressembler à `4f2a9c1e-8b3d-4c5a-9e7f-1a2b3c4d5e6f` ;
+- elle ne doit contenir ni `$`, ni guillemets, ni espaces ;
+- c'est l'**appId** (client ID), pas l'**object ID** de l'app registration.
+
+```bash
+# Valeur attendue
+az ad app list --display-name "ap1-bicep-deploy" --query "[0].appId" -o tsv
+
+# Vérifier le format du GUID
+[[ "$AZURE_CLIENT_ID" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]] \
+  && echo "appId valide" || echo "ERREUR : appId invalide"
+```
+
+Corriger la variable dans **Settings > Environments > `azure-lab` >
+Environment variables** (ou **Settings > Secrets and variables > Actions**),
+puis relancer le workflow.
+
+### 2.6. `BCP333` / `InvalidParameter: adminPassword`
+
+Le secret `VM_ADMIN_PASSWORD` ne respecte pas les contraintes. Il s'agit du
+**mot de passe du compte administrateur local `azureadmin` de la VM Azure**,
+et non du compte de domaine `REDONE\Administrateur`.
+
+- **12 caractères minimum** (le paramètre Bicep impose `@minLength(12)`) ;
 - majuscule, minuscule, chiffre et caractère spécial ;
 - ne pas utiliser un mot de passe déjà utilisé dans un ancien document.
 
-### 2.6. L'extension télécharge un script en 404
+Erreur observée au `what-if` si le secret est trop court :
+
+```text
+Error BCP333: The provided value (whose length will always be less than or
+equal to 11) is too short to assign to a target for which the minimum
+allowable length is 12.
+```
+
+Cause : `readEnvironmentVariable('VM_ADMIN_PASSWORD')` est évalué lors de la
+**compilation Bicep**. La longueur du secret est donc connue avant le
+déploiement, et le pipeline échoue sans rien créer.
+
+Corriger le secret dans **Settings > Environments > `azure-lab` > Secrets**
+(ou **Settings > Secrets and variables > Actions**), avec une valeur de
+12 caractères minimum, puis relancer le workflow.
+
+> Les autres secrets ont des minimums plus bas : `DOMAIN_JOIN_PASSWORD` et
+> `DSRM_PASSWORD` imposent 8 caractères (`@minLength(8)`).
+
+### 2.7. L'extension télécharge un script en 404
 
 - Vérifier que le dépôt est **public** ou que l'URL brute est accessible.
 - Tester l'URL dans un navigateur :
@@ -95,7 +165,7 @@ https://raw.githubusercontent.com/thibaut-huet/AP-BTS-SIO-SISR-V2/main/AP_1/scri
 - Si le fichier a été ajouté après le déploiement, relancer le déploiement ou
   l'extension.
 
-### 2.7. `The extension operation timed out`
+### 2.8. `The extension operation timed out`
 
 - La promotion AD peut dépasser le délai de l'extension à cause du redémarrage.
 - Vérifier `Get-Service NTDS` : si le service tourne, la promotion a réussi.
@@ -234,6 +304,11 @@ Reset-ComputerMachinePassword -Server SRV-AD -Credential (Get-Credential)
 
 - Utiliser un compte du domaine (`REDONE\Administrateur`), pas un compte local.
 - Vérifier que le compte n'est pas verrouillé.
+- **Vérifier que `DOMAIN_JOIN_PASSWORD` correspond exactement au mot de passe
+  actuel de `REDONE\Administrateur` sur `SRV-AD`.** Sur la maquette Proxmox,
+  ce mot de passe est `ServeurAzure2022`. Un changement côté AD sans mise à
+  jour du secret GitHub (ou l'inverse) fait échouer la jonction avec
+  `The user name or password is incorrect`.
 - Vérifier l'OU cible : si elle n'existe pas, la jonction échoue.
 - Tester les identifiants :
 
@@ -248,6 +323,9 @@ Test-ComputerSecureChannel -Server SRV-AD
 - Vérifier que le mot de passe passé par GitHub Secrets ne contient pas de
   caractères interprétés par le shell (le workflow utilise des variables
   d'environnement, mais vérifier les guillemets).
+- Vérifier que `DOMAIN_JOIN_PASSWORD` est bien le mot de passe **actuel** de
+  `REDONE\Administrateur` (maquette : `ServeurAzure2022`) et non l'ancien
+  `Serveur2022`.
 - Relancer l'extension après correction.
 
 ---

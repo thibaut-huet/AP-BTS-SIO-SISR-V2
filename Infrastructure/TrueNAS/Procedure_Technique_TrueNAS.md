@@ -171,7 +171,7 @@ systemctl restart chronyd
 |---|---|
 | Type d'identifiant | Kerberos User |
 | Utilisateur | `Administrateur` |
-| Mot de passe | `Serveur2022` |
+| Mot de passe | `ServeurAzure2022` |
 | Domaine | `redone.local` |
 |nom hôte truenas | 'truenas_admin' |
 |nom de domaine | 'redone.local'|

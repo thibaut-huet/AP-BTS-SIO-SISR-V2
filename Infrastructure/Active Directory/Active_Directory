@@ -92,7 +92,11 @@ Partitionner le disque virtuel de 60 Go et exécuter l'assistant d'installation.
 
 Lors du premier démarrage, définir le mot de passe du compte Administrateur local :
 
-- **Mot de passe :** `Serveur2022`
+- **Mot de passe :** `ServeurAzure2022`
+
+> Ce compte devient le compte `REDONE\Administrateur` après la promotion en
+> contrôleur de domaine. C'est cette valeur qui doit être saisie dans le secret
+> GitHub `DOMAIN_JOIN_PASSWORD` pour le déploiement AP_1.
 
 ### Renommage du serveur
 

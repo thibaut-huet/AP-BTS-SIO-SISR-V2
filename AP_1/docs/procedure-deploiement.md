@@ -140,7 +140,15 @@ echo "APP_ID=$APP_ID"
 ### 3.3. Ajouter la fédération OIDC
 
 Le job utilise `environment: azure-lab`. Le sujet du jeton est donc
-`repo:<owner>/<repo>:environment:azure-lab`.
+`repo:thibaut-huet@286593076/AP-BTS-SIO-SISR-V2@1387710223:environment:azure-lab`.
+
+> **Attention aux identifiants immuables.** Ce dépôt utilise le format de
+> sujet immuable de GitHub (identifiants numériques du propriétaire et du
+> dépôt, séparés par `@`). Le sujet doit être **copié exactement** depuis
+> l'erreur `AADSTS700213` ou depuis
+> `GET /repos/{owner}/{repo}/actions/oidc/customization/sub`
+> (champ `sub_claim_prefix`). Un sujet sans les identifiants ne correspondra
+> plus.
 
 ```bash
 az ad app federated-credential create \
@@ -148,14 +156,15 @@ az ad app federated-credential create \
   --parameters '{
     "name": "github-env-azure-lab",
     "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:thibaut-huet/AP-BTS-SIO-SISR-V2:environment:azure-lab",
+    "subject": "repo:thibaut-huet@286593076/AP-BTS-SIO-SISR-V2@1387710223:environment:azure-lab",
     "audiences": ["api://AzureADTokenExchange"]
   }'
 ```
 
 > Si vous n'utilisez pas d'environnement GitHub, le sujet devient
-> `repo:<owner>/<repo>:ref:refs/heads/main`. Vous pouvez ajouter les deux
-> fédérations pour couvrir le push et l'exécution manuelle.
+> `repo:thibaut-huet@286593076/AP-BTS-SIO-SISR-V2@1387710223:ref:refs/heads/main`.
+> Vous pouvez ajouter les deux fédérations pour couvrir le push et l'exécution
+> manuelle.
 
 ### 3.4. Attribuer le rôle Contributor
 
@@ -173,27 +182,79 @@ az role assignment create \
 
 ### 3.5. Renseigner GitHub
 
+> **Ne jamais recopier `$APP_ID` tel quel dans GitHub.** Les champs GitHub ne
+> sont pas un shell : ils n'interprètent ni `$APP_ID`, ni les guillemets, ni
+> les espaces. Il faut coller la **valeur GUID** affichée par la commande
+> `echo`, par exemple `4f2a9c1e-8b3d-4c5a-9e7f-1a2b3c4d5e6f`.
+>
+> - `AZURE_CLIENT_ID` = **appId** (client ID) de l'app registration.
+> - Ne pas confondre avec l'**object ID** (`az ad app show --query id`), qui
+>   sert dans les commandes `az ad app federated-credential ...`.
+> - Ne pas ajouter de guillemets ni de `$` dans le champ GitHub.
+
+Récupérer les valeurs à copier :
+
+```bash
+APP_ID=$(az ad app list --display-name "ap1-bicep-deploy" --query "[0].appId" -o tsv)
+TENANT_ID=$(az account show --query tenantId -o tsv)
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+echo "AZURE_CLIENT_ID=$APP_ID"
+echo "AZURE_TENANT_ID=$TENANT_ID"
+echo "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
+```
+
+Vérifier que l'appId est bien un GUID valide (8-4-4-4-12 caractères
+hexadécimaux) :
+
+```bash
+[[ "$APP_ID" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]] \
+  && echo "appId valide" || echo "ERREUR : appId invalide"
+```
+
+**Settings > Environments > `azure-lab` > Environment variables** (recommandé,
+car le job déclare `environment: azure-lab`) — ou à défaut
 **Settings > Secrets and variables > Actions > Variables** :
 
-| Variable | Valeur |
-|---|---|
-| `AZURE_CLIENT_ID` | `$APP_ID` |
-| `AZURE_TENANT_ID` | tenant Azure |
-| `AZURE_SUBSCRIPTION_ID` | ID de l'abonnement |
-| `AZURE_RESOURCE_GROUP` | `rg-redone-adds-lab` |
-| `AZURE_LOCATION` | `westeurope` |
+| Variable | Valeur à coller | Exemple |
+|---|---|---|
+| `AZURE_CLIENT_ID` | appId de l'app registration | `4f2a9c1e-8b3d-4c5a-9e7f-1a2b3c4d5e6f` |
+| `AZURE_TENANT_ID` | tenant Azure | `11111111-2222-3333-4444-555555555555` |
+| `AZURE_SUBSCRIPTION_ID` | ID de l'abonnement | `66666666-7777-8888-9999-000000000000` |
+| `AZURE_RESOURCE_GROUP` | nom du resource group (pas un ID) | `rg-redone-adds-lab` |
+| `AZURE_LOCATION` | région Azure | `westeurope` |
 
-**Secrets** :
+**Secrets** (même niveau : environnement `azure-lab` ou dépôt) :
 
-| Secret | Valeur |
-|---|---|
-| `VM_ADMIN_PASSWORD` | mot de passe fort généré |
-| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` |
-| `DSRM_PASSWORD` | mot de passe DSRM fort |
-| `TAILSCALE_AUTH_KEY` | `tskey-auth-...` |
+| Secret | Portée | Valeur / contrainte |
+|---|---|---|
+| `VM_ADMIN_PASSWORD` | **Compte administrateur local de la VM Azure** (`azureadmin`), pas le compte de domaine | **12 caractères minimum**, majuscule + minuscule + chiffre + caractère spécial |
+| `DOMAIN_JOIN_PASSWORD` | Compte de domaine `REDONE\Administrateur` (maquette Proxmox : `ServeurAzure2022`) | 8 caractères minimum, **doit correspondre au mot de passe réel du compte sur `SRV-AD`** |
+| `DSRM_PASSWORD` | Mot de passe DSRM (restauration AD) | 8 caractères minimum |
+| `TAILSCALE_AUTH_KEY` | Clé Tailscale | `tskey-auth-...` |
+
+> **`VM_ADMIN_PASSWORD` ne sert qu'à Azure** : c'est le mot de passe du compte
+> local `azureadmin` créé dans la VM, pas celui de `REDONE\Administrateur`.
+>
+> Le paramètre Bicep impose `@minLength(12)`. Comme `main.bicepparam` lit la
+> valeur avec `readEnvironmentVariable('VM_ADMIN_PASSWORD')` **au moment de la
+> compilation**, un secret de 11 caractères ou moins fait échouer le pipeline
+> dès le `what-if` avec :
+>
+> ```text
+> Error BCP333: The provided value (whose length will always be less than or
+> equal to 11) is too short to assign to a target for which the minimum
+> allowable length is 12.
+> ```
+>
+> Utiliser un mot de passe d'au moins 12 caractères (idéalement 16+).
 
 **Settings > Environments** : créer `azure-lab`. Ajouter si possible une règle
 de protection (reviewers) pour le déploiement.
+
+> **Contrôle avant de relancer le workflow** : dans l'onglet Actions, le run
+> doit afficher un `client-id` sous forme de GUID, jamais `$APP_ID`. En cas de
+> doute, comparer avec `az ad app show --id "$APP_ID" --query appId -o tsv`.
 
 ---
 
@@ -263,7 +324,7 @@ En CLI (équivalent) :
 
 ```bash
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='<mot de passe REDONE\Administrateur>'
+export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 
@@ -334,7 +395,11 @@ Get-Content C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.JsonADDomainExtension
 - [ ] `redone.local` résout depuis la VM Azure.
 - [ ] `Site-Azure` existe et contient `10.3.1.0/24` + `100.64.0.0/10`.
 - [ ] Le compte `REDONE\Administrateur` fonctionne.
+- [ ] Le secret `DOMAIN_JOIN_PASSWORD` correspond au mot de passe réel de
+      `REDONE\Administrateur` sur `SRV-AD` (maquette : `ServeurAzure2022`).
 - [ ] Le mot de passe DSRM est disponible.
+- [ ] Le secret `VM_ADMIN_PASSWORD` fait **au moins 12 caractères** (compte
+      local `azureadmin` de la VM Azure, pas le compte de domaine).
 
 ### 6.2. Lancer le déploiement avec promotion
 
@@ -350,7 +415,7 @@ En CLI :
 
 ```bash
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='<mot de passe REDONE\Administrateur>'
+export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 

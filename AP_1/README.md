@@ -395,14 +395,22 @@ Créer une app registration Azure avec fédération OIDC, puis renseigner :
 | `AZURE_RESOURCE_GROUP` | `rg-redone-adds-lab` |
 | `AZURE_LOCATION` | `westeurope` |
 
+> Coller les **valeurs** GUID, pas les noms de variables shell : `$APP_ID` saisi
+> littéralement dans GitHub provoque `AADSTS700016`. `AZURE_CLIENT_ID` est
+> l'**appId** de l'app registration, pas son object ID. Voir
+> `docs/procedure-deploiement.md` §3.5.
+
 **Secrets GitHub** :
 
-| Secret | Contenu |
-|---|---|
-| `VM_ADMIN_PASSWORD` | mot de passe admin local de la VM Azure |
-| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` |
-| `DSRM_PASSWORD` | mot de passe du mode restauration AD |
-| `TAILSCALE_AUTH_KEY` | clé Tailscale |
+| Secret | Contenu | Contrainte |
+|---|---|---|
+| `VM_ADMIN_PASSWORD` | mot de passe admin local de la VM Azure (`azureadmin`), pas du domaine | **12 caractères minimum** |
+| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` (maquette Proxmox : `ServeurAzure2022`) | 8 caractères minimum |
+| `DSRM_PASSWORD` | mot de passe du mode restauration AD | 8 caractères minimum |
+| `TAILSCALE_AUTH_KEY` | clé Tailscale | `tskey-auth-...` |
+
+> `VM_ADMIN_PASSWORD` trop court → échec dès le `what-if` avec `BCP333`
+> (minimum 12 caractères). Voir `docs/troubleshooting.md` §2.6.
 
 La procédure détaillée (création de l'app registration, fédération OIDC,
 moindre privilège) est dans [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md).
@@ -421,23 +429,45 @@ GitHub > Actions > AP_1 - Deploy Azure AD Infrastructure > Run workflow
 > contrôleur de domaine (phase 2) se fait uniquement via un lancement manuel
 > avec `promoteDc=true`.
 
-Option CLI :
+Option CLI (sans GitHub Actions) :
 
 ```bash
+# Secrets lus par main.bicepparam via readEnvironmentVariable()
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='<mot de passe REDONE\Administrateur>'
+export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 
 az group create --name rg-redone-adds-lab --location westeurope
 
+# Simulation (aucune ressource creee)
+az deployment group what-if \
+  --resource-group rg-redone-adds-lab \
+  --parameters AP_1/bicep/main.bicepparam \
+    promoteDc=false joinDomain=true
+
+# Phase 1 : VM + Tailscale + jonction au domaine (PAS de promotion)
 az deployment group create \
   --resource-group rg-redone-adds-lab \
-  --parameters AP_1/bicep/main.bicepparam
+  --name adds-phase1 \
+  --parameters AP_1/bicep/main.bicepparam \
+    promoteDc=false joinDomain=true
+
+# Phase 2 : promotion en DC, seulement apres validation de la phase 1
+az deployment group create \
+  --resource-group rg-redone-adds-lab \
+  --name adds-phase2 \
+  --parameters AP_1/bicep/main.bicepparam \
+    promoteDc=true joinDomain=true
 ```
+
+> Les paramètres passés en CLI **surchargent** `main.bicepparam` (qui a
+> `promoteDc = true` par défaut) : sans `promoteDc=false`, la VM est promue
+> directement en une seule fois.
 
 > `main.bicepparam` lit les secrets via `readEnvironmentVariable()` : aucun
 > secret n'apparaît dans la ligne de commande ni dans le fichier de paramètres.
+> Sous PowerShell, remplacer `export X=...` par `$env:X = '...'`.
 
 ### 9.4. Valider
 
@@ -603,6 +633,7 @@ Synthèse :
 ## 16. Avertissement
 
 Ce projet est un **laboratoire pédagogique**. Les mots de passe fournis dans les
-anciens documents (`Serveur2022`) sont des mots de passe de maquette et ne
-doivent jamais être réutilisés en production. Les secrets réels doivent être
-générés aléatoirement, stockés dans un coffre et renouvelés.
+documents (`Serveur2022` pour le DSRM, `ServeurAzure2022` pour le compte
+`REDONE\Administrateur`) sont des mots de passe de maquette et ne doivent jamais
+être réutilisés en production. Les secrets réels doivent être générés
+aléatoirement, stockés dans un coffre et renouvelés.

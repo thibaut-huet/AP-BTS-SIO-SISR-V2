@@ -338,7 +338,7 @@ Une fois le rôle AD DS installé, une notification invite à promouvoir le serv
 #### Étape 4 : Authentification avec le Compte Administrateur du Domaine
 1. Dans la boîte de dialogue contextuelle *Sécurité Windows*, fournir les identifiants d'un compte possédant les privilèges d'administration de domaine :
    - **Nom d'utilisateur :** `REDONE\Administrateur`
-   - **Mot de passe :** `Serveur2022` *(mot de passe fort du domaine)*
+   - **Mot de passe :** `ServeurAzure2022` *(mot de passe du domaine, identique au secret `DOMAIN_JOIN_PASSWORD`)*
 2. Cliquer sur **OK**.
 
 ![Saisie des informations d'identification d'administration REDONE\Administrateur](<image AD secondaire/Capture d'écran 2026-10-16 115156.png>)
