@@ -104,6 +104,8 @@ Dans la console Tailscale :
 Console Tailscale > **Settings** > **Keys** > **Generate auth key** :
 
 - clé **pré-autorisée** ;
+- **Reusable** (obligatoire pour relancer le déploiement : une clé non
+  réutilisable est consommée au premier usage) ;
 - expiration courte (1 jour) ;
 - taguée `tag:dc-azure` (nécessaire pour les ACL Tailscale).
 

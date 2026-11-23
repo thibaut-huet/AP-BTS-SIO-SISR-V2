@@ -273,6 +273,35 @@ az vm extension delete -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -n 03-Promote
 # puis relancer le déploiement
 ```
 
+### 2.10. `InUseSubnetCannotBeDeleted` au redéploiement
+
+```text
+Subnet snet-adds is in use by .../networkInterfaces/SRV-AD-AZ01-nic/ipConfigurations/ipconfig1
+```
+
+**Ce n'est pas une erreur du premier déploiement** : elle n'apparaît qu'à la
+**relance**, quand la carte réseau de la VM existe déjà.
+
+Cause : si les sous-réseaux sont déclarés comme **ressources enfants
+séparées** du VNet, le PUT du VNet parent ne contient pas la liste `subnets`.
+Azure en déduit que le sous-réseau doit être supprimé, puis le recréer — ce qui
+échoue car une NIC y est attachée.
+
+Correctif appliqué dans `modules/vnet.bicep` : les sous-réseaux sont déclarés
+**dans** `properties.subnets` de la ressource VNet. Le template est ainsi
+déclaratif complet et ARM fait une mise à jour en place.
+
+> Ne pas corriger en supprimant la VM : ça débloque une fois, mais le problème
+> revient à chaque relance. Corriger le template.
+
+Si le message persiste après le correctif (état de déploiement incohérent),
+libérer la NIC en dernier recours :
+
+```bash
+az vm delete -g rg-redone-adds-lab --name SRV-AD-AZ01 --yes
+# puis relancer le workflow (la VM est recréée par le déploiement)
+```
+
 ---
 
 ## 3. Tailscale
@@ -363,6 +392,36 @@ az network nic update -g rg-redone-adds-lab -n SRV-AD-AZ01-nic \
 ```
 
 Puis redémarrer la VM et compter sur la règle NRPT pour `redone.local`.
+
+### 3.7. `invalid key: API key ... not valid` sur l'extension `01-Tailscale`
+
+```text
+backend error: invalid key: API key kfM6WWt3Lb11CNTRL not valid
+```
+
+La clé d'authentification Tailscale est refusée. Causes, par ordre de fréquence :
+
+1. **Clé déjà consommée** : une auth key n'est **pas réutilisable par défaut**.
+   Utilisée une première fois, elle devient invalide. C'est le piège classique
+   d'une relance de déploiement.
+2. **Clé expirée** (le runbook recommande 1 jour).
+3. **Mauvaise valeur** : clé d'**API** (`tskey-api-...`) collée à la place d'une
+   clé d'**authentification** (`tskey-auth-...`), valeur tronquée, espace ou
+   retour à la ligne ajouté dans le secret GitHub.
+4. Clé révoquée dans la console.
+
+Correctif : console Tailscale > **Settings > Keys** > générer une clé
+**pre-approved**, taguée `tag:dc-azure`, **Reusable**, expiration courte.
+Mettre à jour le secret GitHub `TAILSCALE_AUTH_KEY` (au niveau **environnement
+`azure-lab`** s'il y est défini, sinon au niveau dépôt), puis relancer.
+
+Si l'extension reste en `Failed` après correction :
+
+```bash
+az vm extension delete -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -n 01-Tailscale
+# puis relancer le déploiement
+```
+
 
 ---
 

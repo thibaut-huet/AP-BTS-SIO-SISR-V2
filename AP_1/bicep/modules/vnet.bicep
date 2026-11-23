@@ -2,6 +2,12 @@
 //  Module : Virtual Network Azure
 //  Objectif : creer le VNet, le sous-reseau AD (avec NSG) et, en option,
 //             le GatewaySubnet reserve a une passerelle VPN.
+//
+//  IMPORTANT : les sous-reseaux sont declares DANS la ressource VNet
+//  (properties.subnets) et non comme ressources enfants separees.
+//  Sinon, le PUT du VNet parent au redeploiement ne contient pas la liste
+//  "subnets" et Azure tente de supprimer le sous-reseau -> echec
+//  "InUseSubnetCannotBeDeleted" des qu'une carte reseau y est attachee.
 // ============================================================================
 
 @description('Nom du Virtual Network.')
@@ -28,21 +34,8 @@ param deployVpnGateway bool = false
 @description('Identifiant du NSG a associer au sous-reseau AD.')
 param nsgId string
 
-resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
-  name: vnetName
-  location: location
-  tags: tags
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        vnetAddressPrefix
-      ]
-    }
-  }
-}
-
-resource subnetAdds 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = {
-  parent: vnet
+// Sous-reseau AD : toujours present.
+var snetAdds = {
   name: 'snet-adds'
   properties: {
     addressPrefix: subnetAddsPrefix
@@ -53,11 +46,28 @@ resource subnetAdds 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = {
 }
 
 // Le nom GatewaySubnet est reserve par Azure : il ne doit pas etre renomme.
-resource subnetGateway 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = if (deployVpnGateway) {
-  parent: vnet
+var snetGateway = {
   name: 'GatewaySubnet'
   properties: {
     addressPrefix: gatewaySubnetPrefix
+  }
+}
+
+// Le type "array" explicite evite une erreur d'inference sur le ternaire
+// (les deux objets n'ont pas exactement la meme forme).
+var subnets array = deployVpnGateway ? [snetAdds, snetGateway] : [snetAdds]
+
+resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
+  name: vnetName
+  location: location
+  tags: tags
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        vnetAddressPrefix
+      ]
+    }
+    subnets: subnets
   }
 }
 
@@ -65,7 +75,13 @@ resource subnetGateway 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = 
 output vnetId string = vnet.id
 
 @description('Identifiant du sous-reseau snet-adds.')
-output subnetAddsId string = subnetAdds.id
+output subnetAddsId string = resourceId(
+  'Microsoft.Network/virtualNetworks/subnets',
+  vnetName,
+  'snet-adds'
+)
 
 @description('Identifiant du GatewaySubnet (vide si non deploye).')
-output gatewaySubnetId string = deployVpnGateway ? subnetGateway.id : ''
+output gatewaySubnetId string = deployVpnGateway
+  ? resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, 'GatewaySubnet')
+  : ''
