@@ -23,6 +23,11 @@ rétrogradation du contrôleur de domaine Proxmox.
 > Les phases 4 et 5 sont **optionnelles** et s'exécutent **en mode vérification
 > par défaut** (aucune modification sans `-ExecuteTransfer` / `-ExecuteDemotion`).
 > Pour rejouer la démonstration en boucle, ne pas les exécuter : voir §11.4.
+>
+> **Relance rapide** (reset avant chaque nouvelle démonstration) : le résumé de
+> ce qui se supprime et de ce qui se refait est en **§11.4.1**. En bref :
+> supprimer le resource group, le device Tailscale et le compte ordinateur AD ;
+> conserver l'app registration OIDC et la clé Tailscale si elle est *Reusable*.
 
 ---
 
@@ -730,20 +735,42 @@ Avant suppression :
   DC et de laisser la réplication converger.
 - Documenter l'incident : c'est un excellent retour d'expérience pour le jury.
 
-### 11.4. Rejouer la démonstration (reset)
+### 11.4. Relancer / rejouer la démonstration (reset)
 
 Objectif : refaire la migration plusieurs fois sans toucher à l'infrastructure
 Proxmox de référence. **Ne jamais rétrograder `SRV-AD`** dans ce cas.
 
-Le reset se fait en cinq étapes. Les étapes 1 et 4.2 ne concernent que le cas
-où la VM a été **promue DC**. Si seule la phase 1 a été déployée (VM simple
-serveur membre), il n'y a ni FSMO à ramener ni métadonnées DC à nettoyer.
+#### 11.4.1. Résumé : ce qui se supprime et ce qui se refait
 
-#### 1. FSMO — seulement si un transfert réel a eu lieu
+Supprimer le resource group ne suffit pas : trois identités vivent **en dehors
+d'Azure** et doivent être nettoyées séparément.
 
-Si `05-transfer-fsmo.ps1` a été lancé **avec** `-ExecuteTransfer`, ramener les
-rôles sur `SRV-AD` depuis `SRV-AD` (ou une session avec le module
-ActiveDirectory) :
+| Élément | Où | Action à chaque relance |
+|---|---|---|
+| Resource group `rg-redone-adds-lab` | Azure | **Supprimer** |
+| Device `SRV-AD-AZ01` | Tailscale | **Supprimer** (+ réaffecter l'IP `100.64.0.4` après) |
+| Compte ordinateur `SRV-AD-AZ01` | AD Proxmox | **Supprimer** |
+| Clé `TAILSCALE_AUTH_KEY` | Tailscale + GitHub | **Garder** si elle est *Reusable* et non expirée, sinon **régénérer** |
+| App registration + SP + fédération OIDC | Entra ID | **Garder** (survit à la suppression du RG) |
+| Attribution de rôle `Contributor` | Abonnement (§3.4.2) | **Garder** (survit à la suppression du RG) |
+| Site AD `Site-Azure` + sous-réseaux | AD Proxmox | **Garder** (réutilisables) |
+
+> **Checklist express**
+> 1. Supprimer le resource group
+> 2. Supprimer le device Tailscale
+> 3. Supprimer le compte ordinateur AD
+> 4. Vérifier la clé Tailscale (la régénérer si besoin)
+> 5. Redéployer, puis réaffecter `100.64.0.4`
+
+#### 11.4.2. FSMO — seulement si un transfert réel a eu lieu
+
+Les étapes 4 et 5 étant optionnelles et en mode vérification par défaut, les
+rôles FSMO restent normalement sur `SRV-AD`. **Ne pas transférer les FSMO est le
+bon choix pour une démo rejouable** : aucun rôle ne pointe vers le DC Azure
+éphémère.
+
+Si `05-transfer-fsmo.ps1` a quand même été lancé **avec** `-ExecuteTransfer`,
+ramener les rôles sur `SRV-AD` :
 
 ```powershell
 Move-ADDirectoryServerOperationMasterRole `
@@ -752,17 +779,16 @@ Move-ADDirectoryServerOperationMasterRole `
     -Confirm:$false
 ```
 
-#### 2. Vérifier les FSMO
+Vérifier :
 
 ```powershell
 Get-ADDomain | Select-Object PDCEmulator, RIDMaster, InfrastructureMaster
 Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
 ```
 
-Les 5 rôles doivent pointer vers `SRV-AD`. En phase 1 seule, cette étape est
-inutile : aucune promotion n'a eu lieu.
+Les 5 rôles doivent pointer vers `SRV-AD`.
 
-#### 3. Supprimer le resource group
+#### 11.4.3. Supprimer le resource group
 
 ```bash
 az group delete --name rg-redone-adds-lab --yes
@@ -779,72 +805,113 @@ Attendre la fin de la suppression avant de redéployer : `az group create` peut
 > l'intérêt du choix retenu pour ce livrable : aucun `AuthorizationFailed` ni
 > `No subscriptions found` au run suivant.
 
-#### 4. Nettoyer les identités externes à Azure
+#### 11.4.4. Supprimer le device Tailscale
 
-Supprimer le resource group **ne supprime pas** :
+Dans la console Tailscale, **Machines** :
 
-- le compte ordinateur de la VM dans l'AD Proxmox ;
-- le device de la VM dans le tailnet Tailscale.
+1. supprimer tous les devices `SRV-AD-AZ01` et `SRV-AD-AZ01-1`, `-2`, …
+   (créés par les relances précédentes) ;
+2. **avant** de redéployer, sinon la nouvelle VM sera enregistrée sous un nom
+   suffixé ;
+3. après redéploiement, ouvrir le nouveau device > **Edit** > **IPv4 address**
+   > saisir `100.64.0.4` > **Save**.
 
-Ces deux objets sont indépendants et doivent être nettoyés séparément.
+> L'IP `100.64.0.4` n'est **jamais** attribuée automatiquement : Tailscale
+> donne une IP aléatoire dans `100.64.0.0/10`. Le script
+> `01-setup-tailscale.ps1` ne fait que **signaler** l'écart dans son journal.
+> L'affectation se fait à la main (ou via l'API Tailscale), et une IP ne peut
+> pas être portée par deux devices : supprimer les anciens d'abord.
 
-##### 4.1. Compte ordinateur AD — phase 1 (serveur membre)
+En phase 1, une IP différente n'empêche pas la jonction (elle passe par
+`SRV-AD`, `100.64.0.10`). Elle devient critique pour le RDP et pour la phase 3
+(bascule de la règle NRPT vers `100.64.0.4`).
 
-La VM jointe au domaine possède un objet ordinateur, par exemple
-`CN=SRV-AD-AZ01,CN=Computers,DC=redone,DC=local`. Ce n'est pas un objet DC :
-pas besoin de `ntdsutil`.
+#### 11.4.5. Supprimer le compte ordinateur AD
+
+Depuis `SRV-AD`. Choisir le cas selon la phase atteinte.
+
+**Cas A — phase 1 seule (serveur membre)**, le cas normal :
 
 ```powershell
-# Depuis SRV-AD
-Get-ADComputer -Identity 'SRV-AD-AZ01' -Properties DistinguishedName,LastLogonDate |
-    Format-List
+# 1. Inspecter
+Get-ADComputer -Identity 'SRV-AD-AZ01' -Properties LastLogonDate, DistinguishedName |
+    Format-List Name, DistinguishedName, LastLogonDate
 
-Get-ADComputer -Identity 'SRV-AD-AZ01' -ErrorAction SilentlyContinue |
-    Remove-ADComputer -Confirm:$false
+# 2. Supprimer
+Remove-ADComputer -Identity 'SRV-AD-AZ01' -Confirm:$false
 ```
 
-Si l'objet est dans une OU dédiée, `-Identity` fonctionne quand même ; sinon
-utiliser `Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'"`.
-
-Sans ce nettoyage, la nouvelle VM peut échouer à la jonction avec un message
-du type « le compte existe déjà ». Dans ce cas : supprimer l'objet, puis
-relancer le workflow ou l'extension `02-JoinDomain`.
-
-##### 4.2. Objet DC et métadonnées — phase 2 (VM promue)
-
-Si la VM a été promue, supprimer l'objet ordinateur et, si `NTDS Settings`
-subsiste, utiliser `ntdsutil` :
+Si la suppression échoue avec :
 
 ```text
-ntdsutil
-metadata cleanup
-select operation target
+Remove-ADComputer : Le service d'annuaire ne peut effectuer l'opération requise
+que sur un objet Nœud terminal (erreur 8213)
 ```
 
-Sélectionner le DC `SRV-AD-AZ01`, puis `remove selected server`.
+c'est que l'objet a un enfant (souvent un `serviceConnectionPoint`
+« Windows Virtual Machine » déposé par l'outillage Azure). Vérifier puis
+supprimer récursivement :
 
-Supprimer aussi les enregistrements DNS résiduels de `SRV-AD-AZ01` (`A`, `SRV`,
-`NS`) dans `redone.local` et `_msdcs.redone.local`.
+```powershell
+$dn = (Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'").DistinguishedName
+Get-ADObject -SearchBase $dn -Filter * -SearchScope OneLevel |
+    Format-Table Name, objectClass, DistinguishedName -AutoSize
 
-##### 4.3. Device Tailscale — dans tous les cas
+Remove-ADObject -Identity $dn -Recursive -Confirm:$false
+```
 
-Dans la console Tailscale :
+> Ne pas utiliser `-Recursive` si l'enfant est un `nTDSSettings` : cela signifie
+> que l'objet est un contrôleur de domaine, et il faut passer par `ntdsutil`
+> (cas B). Vérifier d'abord avec `Get-ADDomainController -Filter *`.
 
-1. supprimer l'ancien device `SRV-AD-AZ01` (ou le nom suffixé créé par
-   Tailscale) ;
-2. après redéploiement, réassigner l'**IP statique `100.64.0.4`** au nouveau
-   device ;
-3. vérifier la validité de la clé `tskey-auth-...`. Si elle est expirée,
-   créer une nouvelle clé et mettre à jour le secret GitHub
-   `TAILSCALE_AUTH_KEY`.
+Sans ce nettoyage, la nouvelle VM échoue à la jonction avec un message du type
+« le compte existe déjà ». AD ne peut pas créer deux objets de même nom : il
+réutilise l'ancien (avec ses attributs périmés) ou refuse.
 
-Sans ce nettoyage, la nouvelle VM peut être enregistrée sous un nom différent
-(`SRV-AD-AZ01-1`) ou recevoir une autre IP. Le script
-`01-setup-tailscale.ps1` ne bloque pas : il logue seulement un avertissement
-si l'IP diffère de `100.64.0.4`. Le déploiement peut donc réussir, mais les
-commandes de vérification et le RDP sur `100.64.0.4` ne fonctionneront plus.
+**Cas B — phase 2 (VM promue DC)** :
 
-#### 5. Redéployer
+```powershell
+# 1. S'assurer que l'objet n'est plus un DC actif
+Get-ADDomainController -Filter * | Format-Table Name, Site
+
+# 2. Nettoyage des métadonnées
+ntdsutil
+#   metadata cleanup
+#   select operation target
+#   list sites / select site <n> / list servers in site / select server <n>
+#   quit / remove selected server
+```
+
+Puis supprimer les enregistrements DNS résiduels de `SRV-AD-AZ01` (`A`, `SRV`,
+`NS`) dans `redone.local` et `_msdcs.redone.local` :
+
+```powershell
+Get-DnsServerResourceRecord -ZoneName 'redone.local' -Name 'SRV-AD-AZ01' -ErrorAction SilentlyContinue
+Remove-DnsServerResourceRecord -ZoneName 'redone.local' -Name 'SRV-AD-AZ01' -RRType A -Force
+```
+
+Vérifier qu'il ne reste que les DC voulus (`SRV-AD`, `SRV-AD2`) et que la
+réplication est saine :
+
+```powershell
+Get-ADDomainController -Filter * | Format-Table Name, Site, IPv4Address
+repadmin /replsummary
+```
+
+#### 11.4.6. Vérifier la clé Tailscale
+
+Une clé d'authentification n'est **pas réutilisable par défaut** : utilisée une
+fois, elle devient invalide, et le run suivant échoue avec
+`invalid key: API key ... not valid`.
+
+- clé créée avec **Reusable** et non expirée → **rien à refaire** ;
+- sinon → en générer une nouvelle (pre-approved, `tag:dc-azure`, **Reusable**,
+  expiration courte) et mettre à jour le secret GitHub `TAILSCALE_AUTH_KEY`
+  (au niveau **environnement `azure-lab`** s'il y est défini, sinon dépôt).
+
+Voir `troubleshooting.md` §3.7.
+
+#### 11.4.7. Redéployer
 
 Via le pipeline :
 
@@ -856,13 +923,31 @@ Via le pipeline :
 
 Puis, après validation de la phase 1, relancer avec `promoteDc=true`.
 
+Vérifications après le run :
+
+```bash
+az vm extension list -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -o table
+```
+
+Attendu : `01-Tailscale` et `02-JoinDomain` en `Provisioning succeeded`.
+
+```powershell
+Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'" -Properties LastLogonDate |
+    Format-List Name, LastLogonDate
+```
+
+La `LastLogonDate` doit être **du jour**. Puis réaffecter `100.64.0.4` au
+nouveau device Tailscale.
+
 La réplication repart de `SRV-AD`, resté intact. Le script `05` est idempotent
 et ne déplace que les rôles qui ne sont pas déjà sur la cible.
 
 > **À retenir** : le reset complet nettoie trois choses distinctes — le
-> resource group Azure, le compte ordinateur (ou l'objet DC) dans l'AD, et le
-> device Tailscale. Oublier les deux derniers ne coûte rien, mais provoque des
-> erreurs de jonction ou une IP Tailscale inattendue au redéploiement.
+> resource group Azure, le device Tailscale et le compte ordinateur (ou l'objet
+> DC) dans l'AD. La clé Tailscale et l'app registration OIDC, elles, se
+> conservent. Oublier le device ou le compte AD ne casse pas Azure, mais
+> provoque un nom suffixé dans Tailscale ou une erreur de jonction.
+
 
 ---
 
