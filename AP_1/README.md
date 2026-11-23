@@ -357,7 +357,7 @@ AP_1/
 
 | Prérequis | Détail |
 |---|---|
-| Abonnement Azure | droits `Contributor` sur le resource group |
+| Abonnement Azure | droits `Contributor` (création du RG et attribution de rôle : `Owner` ou `User Access Administrator`) |
 | Azure CLI | version 2.50+ (support `.bicepparam`) |
 | Bicep CLI | installé par `az bicep install` |
 | Tailscale | compte gratuit, agents sur `SRV-AD` et `SRV-AD-AZ01` |
@@ -418,6 +418,15 @@ Créer une app registration Azure avec fédération OIDC, puis renseigner :
 
 La procédure détaillée (création de l'app registration, fédération OIDC,
 moindre privilège) est dans [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md).
+
+> **Portée de l'attribution de rôle.** Le `Contributor` du service principal
+> est attribué au **niveau abonnement** dans ce livrable. C'est un périmètre
+> plus large que nécessaire (il couvre toutes les ressources de l'abonnement),
+> mais il **n'est pas supprimé avec le resource group** et permet de rejouer le
+> déploiement plusieurs fois sans rejouer les commandes de rôle.
+> En production, préférer une attribution limitée au resource group, en
+> acceptant de la recréer après chaque `az group delete` (voir
+> `docs/procedure-deploiement.md` §3.4).
 
 ### 9.3. Déployer
 

@@ -78,13 +78,55 @@ az ad app federated-credential update \
 
 ### 2.3. `AuthorizationFailed` / `The client does not have authorization`
 
-Le service principal n'a pas le rôle sur le resource group. Vérifier :
+Le service principal n'a pas le rôle sur la cible. Vérifier :
 
 ```bash
 az role assignment list --assignee "$APP_ID" --all -o table
 ```
 
-Le rôle `Contributor` sur `rg-redone-adds-lab` est suffisant pour ce livrable.
+`Contributor` sur le resource group (`/subscriptions/<sub>/resourceGroups/rg-redone-adds-lab`) est suffisant pour ce livrable, mais il est **supprimé avec le resource group**. Une attribution au niveau abonnement survit aux resets : c'est le choix retenu ici pour rejouer la démonstration. Voir `procedure-deploiement.md` §3.4.
+
+Réattribuer le rôle (avec un compte `Owner` / `User Access Administrator`) :
+
+```bash
+# Portée abonnement (survit à la suppression du RG) - choix de ce livrable
+SUB_ID=$(az account show --query id -o tsv)
+az role assignment create --assignee "$APP_ID" --role Contributor --scope "/subscriptions/$SUB_ID"
+
+# Ou portée resource group (plus sûr, mais à refaire après chaque suppression)
+az group create -n rg-redone-adds-lab -l polandcentral
+az role assignment create --assignee "$APP_ID" --role Contributor \
+  --scope "/subscriptions/$SUB_ID/resourceGroups/rg-redone-adds-lab"
+```
+
+Comptez 5 à 10 minutes de propagation avant de relancer le workflow.
+
+### 2.3.1. `No subscriptions found for ***` à l'étape Azure login (OIDC)
+
+Symptôme dans le log du run :
+
+```text
+Federated token details:
+ issuer - https://token.actions.githubusercontent.com
+ subject claim - repo:...:environment:azure-lab
+ ...
+Attempting Azure CLI login by using OIDC...
+Error: No subscriptions found for ***.
+```
+
+**L'OIDC fonctionne.** Le `subject claim` a été présenté et accepté (aucun
+`AADSTS700213`), donc la fédération, le `client-id` et le `tenant-id` sont
+corrects. Le message signifie seulement que le service principal **ne voit
+aucun abonnement**, c'est-à-dire qu'il n'a **plus aucun role assignment**.
+
+Cas typique : le resource group a été supprimé, et avec lui l'unique
+attribution `Contributor` scopée sur ce groupe. Il n'y a **rien à régénérer
+côté GitHub** (pas de nouveau secret, pas de nouvelle fédération) : il suffit
+de recréer l'attribution de rôle (§2.3).
+
+> Ne pas confondre avec un problème d'app registration : l'app, le service
+> principal et la fédération vivent dans **Entra ID (tenant)** et ne sont pas
+> supprimés avec le resource group.
 
 ### 2.4. `QuotaExceeded` / `SkuNotAvailable`
 

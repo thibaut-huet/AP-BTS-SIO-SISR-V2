@@ -175,12 +175,61 @@ az ad app federated-credential create \
 
 ### 3.4. Attribuer le rôle Contributor
 
+Le rôle peut être attribué à **deux portées**. Le choix est un compromis entre
+moindre privilège et facilité de relance.
+
+#### 3.4.1. Portée resource group — le plus sûr (recommandé en production)
+
 ```bash
+az group create --name rg-redone-adds-lab --location polandcentral
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 az role assignment create \
   --assignee "$APP_ID" \
   --role Contributor \
   --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/rg-redone-adds-lab"
+```
+
+C'est la portée la plus restrictive : le service principal ne peut agir que
+dans ce groupe de ressources. **C'est le choix à privilégier par défaut**, et
+celui qui correspond à un contexte professionnel.
+
+> **Limite pour une démo rejouable.** L'attribution de rôle fait partie des
+> objets **supprimés avec le resource group**. Or le workflow commence par
+> `az group create` : un `Contributor` limité au RG ne peut pas recréer un RG
+> qui n'existe plus (et la recréation du RG nécessite un droit au niveau
+> abonnement). Après chaque `az group delete`, il faut donc recréer le groupe
+> **et** l'attribution à la main avant de relancer le pipeline.
+
+#### 3.4.2. Portée abonnement — choix retenu pour ce livrable
+
+```bash
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+az role assignment create \
+  --assignee "$APP_ID" \
+  --role Contributor \
+  --scope "/subscriptions/$SUBSCRIPTION_ID"
+```
+
+> **Pourquoi ce choix malgré un périmètre plus large ?** Le TP est une
+> démonstration de migration **rejouée plusieurs fois** : à chaque reset, le
+> resource group est supprimé puis recréé par le pipeline. Une attribution au
+> niveau abonnement **n'est pas supprimée avec le resource group**, ce qui
+> permet d'enchaîner les déploiements sans rejouer manuellement les commandes
+> de rôle et sans risquer un `AuthorizationFailed` sur l'étape
+> « Ensure resource group exists ».
+>
+> Ce n'est **pas** la configuration recommandée en production : `Contributor`
+> au niveau abonnement donne au service principal des droits sur **toutes** les
+> ressources de l'abonnement. En entreprise, revenir à la portée resource group
+> (§3.4.1) ou à un rôle personnalisé limité aux types de ressources déployés.
+
+> Dans les deux cas, il faut que **le compte exécutant la commande** possède
+> `Owner` ou `User Access Administrator` sur la portée visée.
+
+Vérifier l'attribution (propagation : quelques minutes) :
+
+```bash
+az role assignment list --assignee "$APP_ID" --all -o table
 ```
 
 > Pour activer `deployKeyVault=true`, `Contributor` suffit pour créer le coffre
@@ -637,7 +686,10 @@ Avant suppression :
 - [ ] clé Tailscale : la **conserver** si un redéploiement est prévu, la
   révoquer seulement en cas d'arrêt définitif ;
 - [ ] suppression de l'app registration OIDC **seulement** si elle n'est plus
-  utilisée (la conserver pour un reset).
+  utilisée (la conserver pour un reset) ;
+- [ ] attribution de rôle : avec une portée **abonnement** (§3.4.2), elle n'est
+  **pas** supprimée avec le resource group et rien à refaire ; avec une portée
+  resource group (§3.4.1), elle disparaît avec le groupe et doit être recréée.
 
 > Supprimer le resource group sans ramener les FSMO laisserait le domaine avec
 > des rôles pointant vers un DC disparu : il faudrait alors les **saisir**
@@ -717,6 +769,13 @@ az group exists --name rg-redone-adds-lab   # doit retourner false
 
 Attendre la fin de la suppression avant de redéployer : `az group create` peut
 échouer si le groupe est encore en cours de suppression.
+
+> L'app registration, son service principal et la fédération OIDC vivent dans
+> **Entra ID (tenant)** : ils ne sont **pas** supprimés avec le resource group.
+> En revanche, une attribution de rôle **scopée sur le RG** disparaît avec lui ;
+> une attribution **scopée sur l'abonnement** (§3.4.2) survit. C'est tout
+> l'intérêt du choix retenu pour ce livrable : aucun `AuthorizationFailed` ni
+> `No subscriptions found` au run suivant.
 
 #### 4. Nettoyer les identités externes à Azure
 
