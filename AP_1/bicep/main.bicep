@@ -73,7 +73,7 @@ param allowedOnPremSourcePrefixes array = [
 param vmName string = 'SRV-AD-AZ01'
 
 @description('Taille de la VM Azure.')
-param vmSize string = 'Standard_B2ms'
+param vmSize string = 'Standard_D2as_v4'
 
 @description('Adresse IP privee fixe du futur DC dans snet-adds.')
 param privateIpAddress string = '10.3.1.4'

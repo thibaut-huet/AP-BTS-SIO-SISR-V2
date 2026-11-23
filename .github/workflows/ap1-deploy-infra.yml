@@ -47,7 +47,9 @@ concurrency:
 
 env:
   AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-  AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+  # Region eligible pour l'abonnement (polandcentral par defaut).
+  # Surchargeable par la variable GitHub AZURE_LOCATION si besoin.
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'polandcentral' }}
   PARAM_FILE: AP_1/bicep/main.bicepparam
   SCRIPTS_BASE_PATH: AP_1/scripts
 

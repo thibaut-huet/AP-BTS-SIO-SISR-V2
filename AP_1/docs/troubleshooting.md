@@ -88,14 +88,14 @@ Le rôle `Contributor` sur `rg-redone-adds-lab` est suffisant pour ce livrable.
 
 ### 2.4. `QuotaExceeded` / `SkuNotAvailable`
 
-- Changer de région (`westeurope` → `francecentral`) ou de taille
-  (`Standard_B2ms` → `Standard_B2s`).
+- Changer de région (`polandcentral` → `francecentral`) ou de taille
+  (`Standard_D2as_v4` → `Standard_D2s_v4` ou `Standard_B2ms`).
 - Penser à supprimer les VM orphelines : un abonnement gratuit est typiquement
   limité à **4 vCPU régionaux**, pas à un nombre de VM (`README.md` §4.2).
 - Vérifier les quotas :
 
 ```bash
-az vm list-usage --location westeurope -o table
+az vm list-usage --location polandcentral -o table
 ```
 
 ### 2.5. `AADSTS700016` / `Application with identifier '$APP_ID' was not found`
@@ -165,7 +165,62 @@ https://raw.githubusercontent.com/thibaut-huet/AP-BTS-SIO-SISR-V2/main/AP_1/scri
 - Si le fichier a été ajouté après le déploiement, relancer le déploiement ou
   l'extension.
 
-### 2.8. `The extension operation timed out`
+### 2.8. `RequestDisallowedByAzure` / région non éligible
+
+Message typique :
+
+```text
+{"code": "RequestDisallowedByAzure", "target": "nsg-adds-lab",
+ "message": "Resource 'nsg-adds-lab' was disallowed by Azure: This policy
+ maintains a set of best available regions ... The selected region is
+ currently not accepting new customers"}
+```
+
+**Cause** : la région demandée est bloquée pour cet abonnement (souvent un
+abonnement étudiant, gratuit ou récent). Ce n'est pas une erreur Bicep.
+
+Attention : le workflow écrase la valeur de `main.bicepparam` avec la variable
+GitHub `AZURE_LOCATION` :
+
+```yaml
+--parameters "$PARAM_FILE" location="$AZURE_LOCATION"
+```
+
+Même si `main.bicepparam` contient `param location = 'polandcentral'`, c'est la
+variable GitHub qui gagne. Si la variable est absente, le workflow applique
+`polandcentral` par défaut (`${{ vars.AZURE_LOCATION || 'polandcentral' }}`).
+Vérifier les deux niveaux :
+
+- **Settings > Environments > `azure-lab` > Environment variables** (prioritaire)
+- **Settings > Secrets and variables > Actions > Variables**
+
+```bash
+gh variable list                    # variables du dépôt
+gh variable list --env azure-lab    # variables de l'environnement
+```
+
+**Correction** : choisir une région éligible et la mettre dans
+`AZURE_LOCATION`. Tester la création d'un NSG dans une région candidate :
+
+```bash
+LOC=francecentral   # tester aussi polandcentral, swedencentral, northeurope...
+RG="rg-test-$LOC"
+
+az group create --name "$RG" --location "$LOC"
+az network nsg create --resource-group "$RG" --name nsg-test --location "$LOC"
+az group delete --name "$RG" --yes --no-wait
+```
+
+Si la création du NSG passe, la région est utilisable. Mettre à jour
+`AZURE_LOCATION`, puis relancer le workflow. Le resource group peut rester dans
+son ancienne région : les ressources suivent le paramètre `location`.
+
+> Vérifier aussi la disponibilité de la taille de VM dans la nouvelle région :
+> `az vm list-skus --location "$LOC" --size Standard_D2as_v4 -o table`.
+> Si aucune région n'est acceptée, le blocage est au niveau de l'abonnement :
+> contacter le support Azure ou utiliser un autre abonnement.
+
+### 2.9. `The extension operation timed out`
 
 - La promotion AD peut dépasser le délai de l'extension à cause du redémarrage.
 - Vérifier `Get-Service NTDS` : si le service tourne, la promotion a réussi.

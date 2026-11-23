@@ -15,7 +15,7 @@ param location string
 param tags object = {}
 
 @description('Taille de la VM.')
-param vmSize string = 'Standard_B2ms'
+param vmSize string = 'Standard_D2as_v4'
 
 @description('Taille du disque OS en Go.')
 param osDiskSizeGb int = 127

@@ -41,11 +41,13 @@ rétrogradation du contrôleur de domaine Proxmox.
 - [ ] Abonnement Azure actif.
 - [ ] Azure CLI 2.50+ et Bicep CLI.
 - [ ] Droits pour créer un resource group et attribuer un rôle.
-- [ ] Quota suffisant pour une `Standard_B2ms` dans la région choisie.
+- [ ] Quota suffisant pour une `Standard_D2as_v4` dans la région choisie.
+- [ ] **Région éligible pour l'abonnement** (voir `troubleshooting.md` §2.8) :
+  certaines régions refusent les nouveaux abonnements (`RequestDisallowedByAzure`).
 - [ ] **Quota vCPU régional vérifié** :
-  `az vm list-usage --location westeurope -o table | grep -i "Total Regional"`.
+  `az vm list-usage --location polandcentral -o table | grep -i "Total Regional"`.
   Un abonnement gratuit est typiquement limité à 4 vCPU : c'est suffisant pour
-  le DC (`B2ms`, 2 vCPU), pas pour un DC + un client Windows (voir `README.md`
+  le DC (`D2as_v4`, 2 vCPU), pas pour un DC + un client Windows (voir `README.md`
   §4.2).
 
 ### 1.3. Côté GitHub
@@ -125,8 +127,13 @@ nslookup redone.local 100.64.0.10
 ```bash
 az login
 az account show --query "{subscriptionId:id, tenantId:tenantId}" -o table
-az group create --name rg-redone-adds-lab --location westeurope
+az group create --name rg-redone-adds-lab --location polandcentral
 ```
+
+> Remplacer `polandcentral` par une région éligible pour votre abonnement si
+> nécessaire. La valeur doit être **identique** à la variable GitHub
+> `AZURE_LOCATION`, car le workflow écrase `main.bicepparam` avec cette
+> variable. Voir `troubleshooting.md` §2.8.
 
 ### 3.2. Créer l'app registration et le service principal
 
@@ -222,7 +229,12 @@ car le job déclare `environment: azure-lab`) — ou à défaut
 | `AZURE_TENANT_ID` | tenant Azure | `11111111-2222-3333-4444-555555555555` |
 | `AZURE_SUBSCRIPTION_ID` | ID de l'abonnement | `66666666-7777-8888-9999-000000000000` |
 | `AZURE_RESOURCE_GROUP` | nom du resource group (pas un ID) | `rg-redone-adds-lab` |
-| `AZURE_LOCATION` | région Azure | `westeurope` |
+| `AZURE_LOCATION` | région Azure **éligible** pour l'abonnement | `polandcentral` |
+
+> Le workflow utilise `AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'polandcentral' }}` :
+> si la variable GitHub est absente, la région `polandcentral` s'applique par
+> défaut. `main.bicepparam` contient également `param location = 'polandcentral'`,
+> mais le paramètre passé par le workflow reste prioritaire.
 
 **Secrets** (même niveau : environnement `azure-lab` ou dépôt) :
 
@@ -608,22 +620,32 @@ nltest /dsgetdc:redone.local
 # Arrêter la VM sans la supprimer
 az vm deallocate -g rg-redone-adds-lab -n SRV-AD-AZ01
 
-# Supprimer tout le laboratoire
-az group delete --name rg-redone-adds-lab --yes --no-wait
+# Supprimer tout le laboratoire (attendre la fin avant un reset)
+az group delete --name rg-redone-adds-lab --yes
 ```
 
 Avant suppression :
 
-- [ ] sauvegarde de l'état système du DC Azure ;
+- [ ] sauvegarde de l'état système du DC Azure **si la VM a été promue** ;
 - [ ] export des journaux de validation (`04-replication-report.txt`) ;
-- [ ] **rôles FSMO ramenés sur `SRV-AD`** si la migration doit être rejouée
+- [ ] **rôles FSMO ramenés sur `SRV-AD`** si un transfert réel a eu lieu
   (voir 11.4) ;
-- [ ] révocation de la clé Tailscale utilisée ;
-- [ ] suppression de l'app registration OIDC si elle n'est plus utilisée.
+- [ ] suppression du **compte ordinateur AD** `SRV-AD-AZ01`, ou des
+  métadonnées DC s'il a été promu (voir 11.4) ;
+- [ ] suppression du **device Tailscale** `SRV-AD-AZ01` et note de l'IP
+  statique `100.64.0.4` à réassigner après redéploiement ;
+- [ ] clé Tailscale : la **conserver** si un redéploiement est prévu, la
+  révoquer seulement en cas d'arrêt définitif ;
+- [ ] suppression de l'app registration OIDC **seulement** si elle n'est plus
+  utilisée (la conserver pour un reset).
 
 > Supprimer le resource group sans ramener les FSMO laisserait le domaine avec
 > des rôles pointant vers un DC disparu : il faudrait alors les **saisir**
 > (`Seize`), opération risquée. C'est précisément ce qu'évite la procédure 11.4.
+
+> Le resource group ne contient **pas** le compte ordinateur AD ni le device
+> Tailscale : ces deux identités sont externes à Azure et doivent être
+> nettoyées séparément pour un reset complet.
 
 ---
 
@@ -659,65 +681,127 @@ Avant suppression :
 Objectif : refaire la migration plusieurs fois sans toucher à l'infrastructure
 Proxmox de référence. **Ne jamais rétrograder `SRV-AD`** dans ce cas.
 
-Avec `05` et `06` en mode vérification par défaut, la boucle se réduit à :
-supprimer le resource group, nettoyer l'objet DC orphelin, redéployer. L'étape 1
-ne sert que si un transfert FSMO réel a été exécuté (option `-ExecuteTransfer`).
+Le reset se fait en cinq étapes. Les étapes 1 et 4.2 ne concernent que le cas
+où la VM a été **promue DC**. Si seule la phase 1 a été déployée (VM simple
+serveur membre), il n'y a ni FSMO à ramener ni métadonnées DC à nettoyer.
 
-1. **Ramener les rôles FSMO sur `SRV-AD` — seulement si un transfert réel a eu
-   lieu.** Depuis `SRV-AD` (ou via une session avec le module ActiveDirectory) :
+#### 1. FSMO — seulement si un transfert réel a eu lieu
 
-   ```powershell
-   Move-ADDirectoryServerOperationMasterRole `
-       -Identity 'SRV-AD' `
-       -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster `
-       -Confirm:$false
-   ```
+Si `05-transfer-fsmo.ps1` a été lancé **avec** `-ExecuteTransfer`, ramener les
+rôles sur `SRV-AD` depuis `SRV-AD` (ou une session avec le module
+ActiveDirectory) :
 
-2. **Vérifier** que les 5 rôles pointent de nouveau vers `SRV-AD` :
-
-   ```powershell
-   Get-ADDomain | Select-Object PDCEmulator, RIDMaster, InfrastructureMaster
-   Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
-   ```
-
-3. **Supprimer le laboratoire Azure** :
-
-   ```bash
-   az group delete --name rg-redone-adds-lab --yes --no-wait
-   ```
-
-4. **Nettoyer les métadonnées du DC disparu.** Une suppression de VM sans
-   rétrogradation laisse un objet DC orphelin dans l'annuaire (erreurs de
-   réplication). Le supprimer proprement :
-
-   ```powershell
-   # Depuis SRV-AD : supprimer l'objet ordinateur et son compte de DC
-   Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'" | Remove-ADComputer -Confirm:$false
-   ```
-
-   Si l'objet `NTDS Settings` subsiste, utiliser `ntdsutil` :
-   `metadata cleanup` → `select operation target` → sélectionner le DC →
-   `remove selected server`.
-
-5. **Redéployer** via le pipeline (`promoteDc=false` puis `true`) ou
-   `az deployment group create` : la réplication repart de `SRV-AD`, resté
-   intact. Le script `05` est idempotent et ne déplace que les rôles qui ne sont
-   pas déjà sur la cible.
-
-Exemple de boucle complète (PowerShell, avec GitHub CLI) :
-
-```bash
-for i in 1 2 3; do
-  az group delete -n rg-redone-adds-lab --yes --no-wait
-  gh workflow run ap1-deploy-infra.yml -f action=deploy -f promoteDc=false
-  echo "Déploiement $i lancé"
-done
+```powershell
+Move-ADDirectoryServerOperationMasterRole `
+    -Identity 'SRV-AD' `
+    -OperationMasterRole SchemaMaster, DomainNamingMaster, PDCEmulator, RIDMaster, InfrastructureMaster `
+    -Confirm:$false
 ```
 
-> Tant que les FSMO n'ont pas été ramenées sur `SRV-AD`, ne pas supprimer le
-> resource group : elles resteraient rattachées à un DC inexistant. C'est
-> précisément ce qu'évite le mode vérification par défaut des scripts `05` et
-> `06`.
+#### 2. Vérifier les FSMO
+
+```powershell
+Get-ADDomain | Select-Object PDCEmulator, RIDMaster, InfrastructureMaster
+Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
+```
+
+Les 5 rôles doivent pointer vers `SRV-AD`. En phase 1 seule, cette étape est
+inutile : aucune promotion n'a eu lieu.
+
+#### 3. Supprimer le resource group
+
+```bash
+az group delete --name rg-redone-adds-lab --yes
+az group exists --name rg-redone-adds-lab   # doit retourner false
+```
+
+Attendre la fin de la suppression avant de redéployer : `az group create` peut
+échouer si le groupe est encore en cours de suppression.
+
+#### 4. Nettoyer les identités externes à Azure
+
+Supprimer le resource group **ne supprime pas** :
+
+- le compte ordinateur de la VM dans l'AD Proxmox ;
+- le device de la VM dans le tailnet Tailscale.
+
+Ces deux objets sont indépendants et doivent être nettoyés séparément.
+
+##### 4.1. Compte ordinateur AD — phase 1 (serveur membre)
+
+La VM jointe au domaine possède un objet ordinateur, par exemple
+`CN=SRV-AD-AZ01,CN=Computers,DC=redone,DC=local`. Ce n'est pas un objet DC :
+pas besoin de `ntdsutil`.
+
+```powershell
+# Depuis SRV-AD
+Get-ADComputer -Identity 'SRV-AD-AZ01' -Properties DistinguishedName,LastLogonDate |
+    Format-List
+
+Get-ADComputer -Identity 'SRV-AD-AZ01' -ErrorAction SilentlyContinue |
+    Remove-ADComputer -Confirm:$false
+```
+
+Si l'objet est dans une OU dédiée, `-Identity` fonctionne quand même ; sinon
+utiliser `Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'"`.
+
+Sans ce nettoyage, la nouvelle VM peut échouer à la jonction avec un message
+du type « le compte existe déjà ». Dans ce cas : supprimer l'objet, puis
+relancer le workflow ou l'extension `02-JoinDomain`.
+
+##### 4.2. Objet DC et métadonnées — phase 2 (VM promue)
+
+Si la VM a été promue, supprimer l'objet ordinateur et, si `NTDS Settings`
+subsiste, utiliser `ntdsutil` :
+
+```text
+ntdsutil
+metadata cleanup
+select operation target
+```
+
+Sélectionner le DC `SRV-AD-AZ01`, puis `remove selected server`.
+
+Supprimer aussi les enregistrements DNS résiduels de `SRV-AD-AZ01` (`A`, `SRV`,
+`NS`) dans `redone.local` et `_msdcs.redone.local`.
+
+##### 4.3. Device Tailscale — dans tous les cas
+
+Dans la console Tailscale :
+
+1. supprimer l'ancien device `SRV-AD-AZ01` (ou le nom suffixé créé par
+   Tailscale) ;
+2. après redéploiement, réassigner l'**IP statique `100.64.0.4`** au nouveau
+   device ;
+3. vérifier la validité de la clé `tskey-auth-...`. Si elle est expirée,
+   créer une nouvelle clé et mettre à jour le secret GitHub
+   `TAILSCALE_AUTH_KEY`.
+
+Sans ce nettoyage, la nouvelle VM peut être enregistrée sous un nom différent
+(`SRV-AD-AZ01-1`) ou recevoir une autre IP. Le script
+`01-setup-tailscale.ps1` ne bloque pas : il logue seulement un avertissement
+si l'IP diffère de `100.64.0.4`. Le déploiement peut donc réussir, mais les
+commandes de vérification et le RDP sur `100.64.0.4` ne fonctionneront plus.
+
+#### 5. Redéployer
+
+Via le pipeline :
+
+| Champ | Valeur |
+|---|---|
+| `action` | `deploy` |
+| `promoteDc` | `false` |
+| `joinDomain` | `true` |
+
+Puis, après validation de la phase 1, relancer avec `promoteDc=true`.
+
+La réplication repart de `SRV-AD`, resté intact. Le script `05` est idempotent
+et ne déplace que les rôles qui ne sont pas déjà sur la cible.
+
+> **À retenir** : le reset complet nettoie trois choses distinctes — le
+> resource group Azure, le compte ordinateur (ou l'objet DC) dans l'AD, et le
+> device Tailscale. Oublier les deux derniers ne coûte rien, mais provoque des
+> erreurs de jonction ou une IP Tailscale inattendue au redéploiement.
 
 ---
 

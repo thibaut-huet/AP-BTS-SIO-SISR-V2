@@ -164,9 +164,9 @@ Conséquence concrète : on ne raisonne pas en « nombre de VM » mais en
 
 | Combinaison possible sous 4 vCPU | Total | Remarque |
 |---|---|---|
-| 1 × `Standard_B2ms` (2 vCPU / 8 Go) | 2 / 4 | configuration actuelle : confortable |
-| `B2ms` + 1 client Linux `B1s` (1 vCPU) | 3 / 4 | laisse 1 vCPU de marge |
-| `B2ms` + 1 client Windows `B2s` (2 vCPU) | 4 / 4 | pile le quota, aucune marge |
+| 1 × `Standard_D2as_v4` (2 vCPU / 8 Go) | 2 / 4 | configuration actuelle : confortable |
+| `D2as_v4` + 1 client Linux `B1s` (1 vCPU) | 3 / 4 | laisse 1 vCPU de marge |
+| `D2as_v4` + 1 client Windows `B2s` (2 vCPU) | 4 / 4 | pile le quota, aucune marge |
 | 4 × `B1s` (1 vCPU) | 4 / 4 | mais 1 Go de RAM : insuffisant pour un DC |
 
 Deux pièges à connaître pour le poste client :
@@ -180,7 +180,7 @@ Deux pièges à connaître pour le poste client :
 Vérifier le quota avant tout déploiement :
 
 ```bash
-az vm list-usage --location westeurope -o table | grep -i "Total Regional"
+az vm list-usage --location polandcentral -o table | grep -i "Total Regional"
 ```
 
 Stratégie retenue pour tenir dans le quota :
@@ -393,7 +393,11 @@ Créer une app registration Azure avec fédération OIDC, puis renseigner :
 | `AZURE_TENANT_ID` | `00000000-0000-0000-0000-000000000000` |
 | `AZURE_SUBSCRIPTION_ID` | `00000000-0000-0000-0000-000000000000` |
 | `AZURE_RESOURCE_GROUP` | `rg-redone-adds-lab` |
-| `AZURE_LOCATION` | `westeurope` |
+| `AZURE_LOCATION` | `polandcentral` (région **éligible** pour l'abonnement) |
+
+> Le workflow applique `polandcentral` par défaut si `AZURE_LOCATION` n'est pas
+> définie (`${{ vars.AZURE_LOCATION || 'polandcentral' }}`). `main.bicepparam`
+> contient aussi `param location = 'polandcentral'`.
 
 > Coller les **valeurs** GUID, pas les noms de variables shell : `$APP_ID` saisi
 > littéralement dans GitHub provoque `AADSTS700016`. `AZURE_CLIENT_ID` est
@@ -438,7 +442,7 @@ export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 
-az group create --name rg-redone-adds-lab --location westeurope
+az group create --name rg-redone-adds-lab --location polandcentral
 
 # Simulation (aucune ressource creee)
 az deployment group what-if \
@@ -547,7 +551,8 @@ un rapport complet.
 
 Ordre de grandeur (à vérifier sur le calculateur Azure) :
 
-- `Standard_B2ms` : environ 60 à 70 €/mois si la VM reste allumée 24/7 ;
+- `Standard_D2as_v4` (Windows inclus) : environ 130 à 150 €/mois si la VM
+  reste allumée 24/7, tarif à la demande à vérifier sur le calculateur Azure ;
 - disque `StandardSSD_LRS` 127 Go : quelques euros par mois ;
 - IP publique Standard : quelques euros par mois ;
 - Tailscale : offre gratuite suffisante pour l'AP ;
@@ -572,6 +577,10 @@ az group delete --name rg-redone-adds-lab --yes --no-wait
 
 > Attention : supprimer le resource group supprime la VM et son disque. En
 > production, sauvegarder l'état système du DC avant toute suppression.
+>
+> Le **compte ordinateur AD** (`SRV-AD-AZ01`) et le **device Tailscale** ne
+> sont pas dans le resource group : les nettoyer séparément pour un reset
+> complet. Procédure détaillée : `docs/procedure-deploiement.md` §11.4.
 
 ---
 
