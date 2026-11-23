@@ -328,6 +328,49 @@ tailscale up --authkey=<nouvelle-cle> --hostname=SRV-AD-AZ01 --unattended --acce
   `Get-NetConnectionProfile | Where-Object InterfaceAlias -like '*Tailscale*' | Set-NetConnectionProfile -NetworkCategory Private`
 - Tester depuis un autre poste du tailnet pour isoler le problème.
 
+#### 3.2.1. `1 route is advertised but not approved` (jonction en `0x54b`)
+
+Symptôme : `tailscale status` sur `SRV-AD` affiche
+`1 route is advertised but not approved`, et l'extension `02-JoinDomain` échoue
+avec :
+
+```text
+An Active Directory Controller for the domain could not be contacted.
+...
+NetpCheckDomainNameIsValid [ Exists ] for 'redone.local' returned 0x54b
+```
+
+`0x54b` = `1355` = `ERROR_NO_SUCH_DOMAIN`. Ce n'est ni un problème de compte ni
+de mot de passe : c'est la **route LAN qui n'est pas approuvée**.
+
+Enchaînement : la VM Azure demande `redone.local` à `SRV-AD` (`100.64.0.10` via
+la règle NRPT) → le DC répond avec son **IP LAN `10.2.41.x`** → sans route
+approuvée, cette adresse est injoignable → la jonction échoue.
+
+Correctif :
+
+1. Console Tailscale > **Machines > `srv-ad` > Subnet routes** (ou
+   **⋯ > Edit route settings**) > cocher `10.2.41.0/24` > **Save**.
+2. Vérifier sur `SRV-AD` : `tailscale status` sans la ligne « not approved ».
+3. Retester depuis la VM Azure :
+
+```bash
+az vm run-command invoke -g rg-redone-adds-lab -n SRV-AD-AZ01 \
+  --command-id RunPowerShellScript \
+  --scripts "Resolve-DnsName redone.local; nltest /dsgetdc:redone.local" \
+  --query "value[0].message" -o tsv
+```
+
+4. Relancer le workflow (`joinDomain=true`) : l'extension `02` réessaie.
+
+> L'approbation peut être **perdue** (recréation du device, changement de clé,
+> nouvelle annonce de route). Pour l'automatiser, utiliser `autoApprovers` dans
+> la politique ACL Tailscale (voir `procedure-deploiement.md` §2.1).
+
+> Vérifier aussi que le côté Azure accepte les routes : l'extension
+> `01-Tailscale` est déployée avec `-AcceptRoutes`.
+
+
 ### 3.3. `redone.local` ne résout pas
 
 - Vérifier la règle NRPT (`*.redone.local` -> `100.64.0.10`, puis `100.64.0.4`
@@ -341,7 +384,8 @@ Resolve-DnsName _ldap._tcp.dc._msdcs.redone.local -Server 100.64.0.10 -Type SRV
 ```
 
 - Si la route `10.2.41.0/24` a été annoncée, vérifier qu'elle est **approuvée**
-  dans la console Tailscale.
+  dans la console Tailscale (voir §3.2.1 : `1 route is advertised but not
+  approved`).
 
 ### 3.4. Le nom de machine Tailscale n'est pas `SRV-AD-AZ01`
 

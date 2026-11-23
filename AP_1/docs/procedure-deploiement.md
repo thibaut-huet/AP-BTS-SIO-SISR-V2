@@ -88,10 +88,45 @@ Get-NetConnectionProfile |
 > Taguer aussi `srv-ad` avec `tag:dc-onprem` dans la console Tailscale
 > (`Machines > srv-ad > Edit > Tags`) : les ACL de l'AP s'appuient sur ce tag.
 
-> `--advertise-routes=10.2.41.0/24` est **optionnel** : il permet au DC Azure
-> d'atteindre le NAS et les clients du LAN. Il faut ensuite approuver la route
-> dans la console Tailscale (`Machines > srv-ad > Edit route settings`).
-> Sans cette option, seul le DC `SRV-AD` est joignable via son IP Tailscale.
+#### Approuver la route `10.2.41.0/24` (indispensable)
+
+`--advertise-routes` **ne suffit pas** : la route doit être **approuvée** par un
+administrateur du tailnet. Tant qu'elle ne l'est pas, `tailscale status` affiche :
+
+```text
+# Health check:
+#     - Some peers are advertising routes but not approved
+1 route is advertised but not approved
+```
+
+Comment cela casse la jonction : la VM Azure interroge `SRV-AD` (via NRPT,
+`100.64.0.10`), qui répond avec son **IP LAN `10.2.41.x`**. Sans la route
+approuvée, cette adresse est injoignable depuis Azure, et l'extension
+`02-JoinDomain` échoue avec `0x54b` (`ERROR_NO_SUCH_DOMAIN`).
+
+Approbation dans la console : **Machines > `srv-ad` > Subnet routes** (ou
+**⋯ > Edit route settings**) > cocher `10.2.41.0/24` > **Save**.
+
+Vérifier ensuite sur `SRV-AD` :
+
+```powershell
+tailscale status        # plus de "not approved"
+```
+
+> **L'approbation peut être perdue** après la recréation du device, un changement
+> de clé ou une nouvelle annonce de route. La revérifier à chaque relance.
+>
+> Pour ne plus y penser, l'auto-approbation se configure dans la politique ACL
+> Tailscale :
+>
+> ```json
+> "autoApprovers": {
+>   "routes": {
+>     "10.2.41.0/24": ["tag:dc-onprem"]
+>   }
+> }
+> ```
+
 
 ### 2.2. Fixer les IP Tailscale
 
@@ -814,7 +849,11 @@ Dans la console Tailscale, **Machines** :
 2. **avant** de redéployer, sinon la nouvelle VM sera enregistrée sous un nom
    suffixé ;
 3. après redéploiement, ouvrir le nouveau device > **Edit** > **IPv4 address**
-   > saisir `100.64.0.4` > **Save**.
+   > saisir `100.64.0.4` > **Save** ;
+4. vérifier que la route `10.2.41.0/24` annoncée par `SRV-AD` est toujours
+   **approuvée** (`SRV-AD > Subnet routes`). Une recréation de device ou un
+   changement de clé peut faire perdre l'approbation — voir
+   `troubleshooting.md` §3.2.1.
 
 > L'IP `100.64.0.4` n'est **jamais** attribuée automatiquement : Tailscale
 > donne une IP aléatoire dans `100.64.0.0/10`. Le script
@@ -957,6 +996,8 @@ et ne déplace que les rôles qui ne sont pas déjà sur la cible.
 - [ ] Historique Git avec plusieurs commits (infra, scripts, docs).
 - [ ] VM Azure visible dans le portail, NSG appliqué.
 - [ ] `tailscale status` connecté des deux côtés.
+- [ ] Route `10.2.41.0/24` **approuvée** (`1 route is advertised but not
+  approved` absent) et IP statique `100.64.0.4` affectée au DC Azure.
 - [ ] `Get-ADDomainController -Filter *` affiche 3 DC.
 - [ ] `repadmin /replsummary` : 0 échec.
 - [ ] `dcdiag` : tests de réplication/DNS OK.
