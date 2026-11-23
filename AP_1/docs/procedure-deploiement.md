@@ -133,11 +133,19 @@ tailscale status        # plus de "not approved"
 Dans la console Tailscale :
 
 1. **Machines** > `srv-ad` > **Edit** > **IPv4 address** > `100.64.0.10`.
-2. Plus tard, faire de même pour `SRV-AD-AZ01` > `100.64.0.4`.
+2. Plus tard, faire de même pour `SRV-AD-AZ01` > `100.64.0.4` — voir §5.4,
+   car cette IP n'existe qu'après le premier déploiement.
 
-> L'IP statique doit être définie **avant** le déploiement Azure, car la règle
-> NRPT de la VM Azure pointe `*.redone.local` vers `100.64.0.10` via Tailscale.
+> **Aucune IP Tailscale n'est automatique.** Tailscale attribue une adresse
+> aléatoire dans `100.64.0.0/10` ; `100.64.0.10` et `100.64.0.4` sont des choix
+> du projet, définis à la main dans la console. Aucun script ne peut les imposer.
+>
+> `100.64.0.10` doit être définie **avant** le déploiement Azure, car la règle
+> NRPT de la VM Azure pointe `*.redone.local` vers cette IP.
 > La NIC Azure conserve `168.63.129.16` pour la résolution Internet.
+>
+> `100.64.0.4` se définit **après** le déploiement (§5.4) et doit être
+> réaffectée à chaque relance.
 
 ### 2.3. Créer une clé d'authentification
 
@@ -456,10 +464,36 @@ Statuts attendus :
 | `01-Tailscale` | `Provisioning succeeded` |
 | `02-JoinDomain` | `Provisioning succeeded` |
 
-### 5.4. Vérifier Tailscale et la jonction
+### 5.4. Affecter l'IP Tailscale statique `100.64.0.4`
+
+**Étape manuelle obligatoire.** Rien dans le pipeline ne définit cette IP :
+Tailscale attribue une adresse **aléatoire** dans `100.64.0.0/10` au nouveau
+device. Le script `01-setup-tailscale.ps1` ne fait que **journaliser** un
+avertissement si l'IP diffère de `100.64.0.4` ; il ne peut pas la forcer, car
+elle est gérée côté serveurs de coordination Tailscale.
+
+Dans la console Tailscale :
+
+1. **Machines** : supprimer les anciens devices `SRV-AD-AZ01*` s'ils existent
+   encore (sinon le nouveau prend un suffixe `-1`, `-2`…) ;
+2. ouvrir le device `SRV-AD-AZ01` du déploiement en cours ;
+3. **Edit** > **IPv4 address** > saisir `100.64.0.4` > **Save**.
+
+Pourquoi c'est nécessaire :
+
+- le RDP de la suite du runbook se fait sur `100.64.0.4` ;
+- en phase 3, `04-validate-replication.ps1` bascule la règle NRPT vers
+  `100.64.0.4` (le DC Azure devient sa propre référence DNS).
+
+> En phase 1, une IP différente n'empêche **pas** la jonction : celle-ci passe
+> par `SRV-AD` (`100.64.0.10`). C'est pourquoi l'extension `02-JoinDomain` peut
+> réussir avant que l'IP n'ait été fixée. En revanche, sans cette étape, le RDP
+> sur `100.64.0.4` et la phase 3 ne fonctionneront pas.
+
+### 5.5. Vérifier Tailscale et la jonction
 
 Dans la console Tailscale, la machine `SRV-AD-AZ01` doit apparaître avec
-l'IP `100.64.0.4`.
+l'IP `100.64.0.4` (voir §5.4).
 
 Se connecter en RDP à `100.64.0.4` (ou via `mstsc /v:100.64.0.4`), puis :
 
@@ -496,6 +530,8 @@ Get-Content C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.JsonADDomainExtension
 
 - [ ] `SRV-AD-AZ01` est jointe au domaine.
 - [ ] `redone.local` résout depuis la VM Azure.
+- [ ] L'IP Tailscale `100.64.0.4` est affectée au device `SRV-AD-AZ01`
+      (§5.4) et la route `10.2.41.0/24` est approuvée (§2.1).
 - [ ] `Site-Azure` existe et contient `10.3.1.0/24` + `100.64.0.0/10`.
 - [ ] Le compte `REDONE\Administrateur` fonctionne.
 - [ ] Le secret `DOMAIN_JOIN_PASSWORD` correspond au mot de passe réel de
