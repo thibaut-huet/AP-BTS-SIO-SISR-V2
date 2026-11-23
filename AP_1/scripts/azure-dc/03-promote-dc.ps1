@@ -5,7 +5,7 @@
     secondaire du domaine redone.local.
 
 .DESCRIPTION
-    Executee par l'extension Azure CustomScriptExtension (03-PromoteDC).
+    Executee par la ressource Azure runCommands (03-PromoteDC).
     La VM doit :
       - etre jointe au domaine (extension 02-JoinDomain) ;
       - resoudre redone.local via le DC on-prem (Tailscale ou VPN) ;

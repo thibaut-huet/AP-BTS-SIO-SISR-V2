@@ -122,8 +122,16 @@ resource joinDomainExtension 'Microsoft.Compute/virtualMachines/extensions@2023-
 
 // ---------------------------------------------------------------------------
 // 03 - Promotion en controleur de domaine secondaire
+//
+// IMPORTANT : sur Windows, un seul CustomScriptExtension est autorise par VM.
+// 01-Tailscale utilise deja ce handler ; declarer 03 dans le meme handler
+// provoque au deploiement l'erreur :
+//   "Multiple VMExtensions per handler not supported for OS type 'Windows'"
+// La promotion passe donc par une ressource runCommands, qui peut coexister
+// avec les extensions. Les secrets sont transmis via protectedParameters
+// (non journalises par Azure).
 // ---------------------------------------------------------------------------
-resource promoteDcExtension 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = if (promoteDc) {
+resource promoteDcCommand 'Microsoft.Compute/virtualMachines/runCommands@2024-03-01' = if (promoteDc) {
   parent: vm
   name: '03-PromoteDC'
   location: location
@@ -131,18 +139,35 @@ resource promoteDcExtension 'Microsoft.Compute/virtualMachines/extensions@2023-0
     joinDomainExtension
   ]
   properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        '${repositoryRawBaseUrl}/${scriptsBasePath}/azure-dc/03-promote-dc.ps1'
-      ]
+    source: {
+      scriptUri: '${repositoryRawBaseUrl}/${scriptsBasePath}/azure-dc/03-promote-dc.ps1'
     }
-    protectedSettings: {
-      commandToExecute: 'powershell.exe -ExecutionPolicy Bypass -File 03-promote-dc.ps1 -DomainName "${domainName}" -DomainAdminUser "${domainJoinUser}" -DomainAdminPasswordB64 "${base64(domainJoinPassword)}" -SafeModePasswordB64 "${base64(safeModePassword)}" -ReplicationSourceDC "${replicationSourceDC}"'
-    }
+    parameters: [
+      {
+        name: 'DomainName'
+        value: domainName
+      }
+      {
+        name: 'DomainAdminUser'
+        value: domainJoinUser
+      }
+      {
+        name: 'ReplicationSourceDC'
+        value: replicationSourceDC
+      }
+    ]
+    protectedParameters: [
+      {
+        name: 'DomainAdminPassword'
+        value: domainJoinPassword
+      }
+      {
+        name: 'SafeModePassword'
+        value: safeModePassword
+      }
+    ]
+    // La promotion redemarre la VM : laisser un delai large.
+    timeoutInSeconds: 7200
   }
 }
 

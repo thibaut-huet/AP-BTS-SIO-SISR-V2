@@ -264,12 +264,12 @@ son ancienne région : les ressources suivent le paramètre `location`.
 
 ### 2.9. `The extension operation timed out`
 
-- La promotion AD peut dépasser le délai de l'extension à cause du redémarrage.
+- La promotion AD peut dépasser le délai de la commande à cause du redémarrage.
 - Vérifier `Get-Service NTDS` : si le service tourne, la promotion a réussi.
 - Relancer uniquement si nécessaire :
 
 ```bash
-az vm extension delete -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -n 03-PromoteDC
+az vm run-command delete -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -n 03-PromoteDC
 # puis relancer le déploiement
 ```
 
@@ -300,6 +300,30 @@ libérer la NIC en dernier recours :
 ```bash
 az vm delete -g rg-redone-adds-lab --name SRV-AD-AZ01 --yes
 # puis relancer le workflow (la VM est recréée par le déploiement)
+```
+
+### 2.11. `Multiple VMExtensions per handler not supported for OS type 'Windows'`
+
+```text
+VMExtension '03-PromoteDC' with handler 'Microsoft.Compute.CustomScriptExtension'
+already added or specified in input.
+```
+
+Sur **Windows**, un seul `CustomScriptExtension` est autorisé par VM (limite de
+l'agent). Comme `01-Tailscale` l'utilise déjà, déclarer `03-PromoteDC` dans le
+même handler échoue.
+
+Correctif appliqué dans `modules/extensions.bicep` : la promotion utilise une
+ressource **`Microsoft.Compute/virtualMachines/runCommands`**, qui peut
+coexister avec les extensions. Les secrets y sont passés par
+`protectedParameters` (non journalisés).
+
+Si un ancien `03-PromoteDC` a été créé comme extension avant le correctif, le
+supprimer pour éviter un conflit de nom :
+
+```bash
+az vm extension list -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -o table
+az vm extension delete -g rg-redone-adds-lab --vm-name SRV-AD-AZ01 -n 03-PromoteDC
 ```
 
 ---
@@ -542,9 +566,11 @@ Lire le détail dans `dcpromo.log`. Causes fréquentes :
 - compte utilisé non administrateur du domaine ;
 - réplication en erreur avec les autres DC.
 
-### 5.2. La promotion redémarre la VM et Azure marque l'extension en échec
+### 5.2. La promotion redémarre la VM et Azure marque la commande en échec
 
-Comportement connu. Vérifier après redémarrage :
+Comportement connu. La promotion est lancée par la ressource `runCommands`
+`03-PromoteDC` ; le redémarrage de la VM interrompt son exécution, ce qui peut
+la faire apparaître en `failed`. Vérifier après redémarrage :
 
 ```powershell
 Get-Service NTDS
@@ -553,6 +579,9 @@ Get-ADDomainController -Filter *
 
 Si `NTDS` tourne, la promotion est réussie. Le statut Azure n'est pas
 représentatif de l'état réel.
+
+> Sur Windows, un seul `CustomScriptExtension` est autorisé par VM. C'est
+> pourquoi la promotion n'utilise pas ce handler mais `runCommands`.
 
 ### 5.3. `The DNS server is not advertising itself`
 

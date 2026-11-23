@@ -375,11 +375,15 @@ AP_1/
 ### 9.1. Préparer Tailscale
 
 1. Installer Tailscale sur `SRV-AD` et noter son IP `100.x.y.z`.
-2. Dans la console Tailscale, fixer une **IP statique** pour `SRV-AD`
-   (`100.64.0.10` dans ce livrable) et pour `SRV-AD-AZ01` (`100.64.0.4`).
-3. Créer une clé d'authentification (`tskey-auth-...`) et la stocker dans
-   GitHub Secrets `TAILSCALE_AUTH_KEY`.
-4. Vérifier depuis `SRV-AD` : `tailscale status` et `tailscale ip -4`.
+2. Dans la console Tailscale, **approuver la route** `10.2.41.0/24` annoncée
+   par `SRV-AD`, puis fixer une **IP statique** pour `SRV-AD`
+   (`100.64.0.10` dans ce livrable). Rien n'est automatique.
+3. Créer une clé d'authentification (`tskey-auth-...`), **Reusable**, et la
+   stocker dans GitHub Secrets `TAILSCALE_AUTH_KEY`.
+4. Vérifier depuis `SRV-AD` : `tailscale status` (aucun « route … not
+   approved ») et `tailscale ip -4`.
+5. Après le déploiement Azure, affecter `100.64.0.4` au device `SRV-AD-AZ01`
+   (voir `docs/procedure-deploiement.md` §5.4).
 
 ### 9.2. Configurer Azure et GitHub
 
@@ -549,7 +553,8 @@ un rapport complet.
 | **VM neuve + réplication** plutôt que conversion `.qcow2` | évite l'USN Rollback et les incohérences de base AD |
 | **Tailscale** plutôt que VPN IPsec | simplicité, NAT traversal, coût nul côté Azure ; `deployVpnGateway=true` prépare le `GatewaySubnet` pour une passerelle IPsec |
 | **Extension `JsonADDomainExtension`** | jonction gérée nativement par Azure, redémarrage pris en charge |
-| **CustomScriptExtension** pour AD DS | automatise l'installation du rôle et la promotion |
+| **CustomScriptExtension** pour Tailscale | installe et rattache la VM au tailnet avant la jonction |
+| **Ressource `runCommands`** pour AD DS | installe le rôle et promeut le DC ; permet de cohabiter avec le CustomScriptExtension (un seul autorisé par VM sous Windows) |
 | **DC additionnel** | continuité de service, réplication multimaître, pas de bascule brutale |
 | **Sites et services AD** | maîtrise des flux de réplication entre Proxmox et Azure |
 | **Aucun RDP entrant depuis Internet** | l'IP publique sert à la sortie ; le NSG filtre l'administration |

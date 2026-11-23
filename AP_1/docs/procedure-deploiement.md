@@ -566,9 +566,12 @@ az deployment group create \
     joinDomain=true
 ```
 
-> La promotion installe AD DS, le rôle DNS et redémarre la VM. L'extension
-> `03-PromoteDC` peut apparaître en `failed` dans Azure à cause du redémarrage :
-> vérifier que `NTDS` tourne avant de conclure à un échec.
+> La promotion installe AD DS, le rôle DNS et redémarre la VM. Elle est
+> exécutée par une ressource **`runCommands`** (`03-PromoteDC`) et non par une
+> extension `CustomScriptExtension` : sur Windows, un seul CustomScriptExtension
+> est autorisé par VM, et `01-Tailscale` l'utilise déjà. Le redémarrage peut
+> faire apparaître la commande en `failed` : vérifier que `NTDS` tourne avant de
+> conclure à un échec.
 
 ### 6.3. Vérifier la promotion
 
@@ -582,8 +585,7 @@ Get-ADDomainController -Filter * | Format-Table Name, Site, IPv4Address
 Si la promotion n'a pas eu lieu, exécuter le script manuellement :
 
 ```powershell
-cd C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.CustomScriptExtension\*
-# ou copier le script depuis le depot
+# copier le script depuis le depot ou depuis C:\Packages\Plugins\...
 .\03-promote-dc.ps1 `
   -DomainName 'redone.local' `
   -DomainAdminUser 'REDONE\Administrateur' `
