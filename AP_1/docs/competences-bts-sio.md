@@ -71,8 +71,9 @@ du portail Azure.
 - Contrôle des rôles FSMO.
 - Vérification du partage `SYSVOL` / `NETLOGON`.
 - Analyse des journaux d'extensions et de `dcpromo.log`.
-- Procédure de transfert FSMO et de rétrogradation (toutes deux optionnelles,
-  en mode vérification par défaut : `-ExecuteTransfer` / `-ExecuteDemotion`).
+- Procédure de transfert FSMO et de rétrogradation : scénario de **bascule
+  définitive, hors démonstration** (toutes deux optionnelles, en mode
+  vérification par défaut : `-ExecuteTransfer` / `-ExecuteDemotion`).
 
 **Preuves :** scripts `04`, `05`, `06`, rapport texte, captures.
 
@@ -120,9 +121,9 @@ du portail Azure.
 - Un seul DC dans Azure : ce n'est pas une haute disponibilité cloud complète.
 - Le DHCP n'est pas migré.
 - **Quota** : l'abonnement de démonstration limite le total de vCPU régionaux
-  (typiquement 4), pas un nombre de VM. Le déploiement principal tient donc sur
-  une seule VM ; le poste client est un client Linux léger ou le poste Proxmox
-  existant (`README.md` §4.2).
+  (typiquement 4), pas un nombre de VM. Le déploiement tient donc sur une seule
+  VM (le DC) ; l'authentification se teste depuis un poste Proxmox existant
+  (`README.md` §4.2).
 - **Stockage** : `TRUENAS-01` n'est pas migré ; Azure Files est proposé mais
   hors périmètre (`README.md` §4.3).
 - **Cloud natif** : la bascule vers Entra ID + Intune est une perspective
@@ -147,11 +148,11 @@ du portail Azure.
 - [ ] `repadmin /replsummary` avec 0 échec.
 - [ ] `dcdiag` (extrait).
 - [ ] Sites AD et sous-réseaux.
-- [ ] Transfert FSMO : **optionnel** (mode vérification par défaut,
-  `-ExecuteTransfer` pour l'action réelle) — captures du mode vérification
-  suffisantes si la démonstration doit rester rejouable.
-- [ ] Rétrogradation de `SRV-AD` : **optionnelle** (mode vérification par
-  défaut, `-ExecuteDemotion` pour l'action réelle) — captures du mode
-  vérification suffisantes si la démonstration doit rester rejouable.
+- [ ] Transfert FSMO : **hors démonstration** (scénario de bascule définitive ;
+  optionnel, mode vérification par défaut, `-ExecuteTransfer` pour l'action
+  réelle) — captures du mode vérification suffisantes.
+- [ ] Rétrogradation de `SRV-AD` : **hors démonstration** (optionnelle, mode
+  vérification par défaut, `-ExecuteDemotion` pour l'action réelle) — captures
+  du mode vérification suffisantes.
 - [ ] Partage SMB TrueNAS accessible.
 - [ ] Rapport `04-replication-report.txt`.

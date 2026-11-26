@@ -29,10 +29,17 @@ démarche **DevOps / Infrastructure as Code** :
 4. le raccorder au domaine existant via **Tailscale** (WireGuard) ;
 5. laisser la **réplication native Active Directory** synchroniser utilisateurs,
    groupes, mots de passe (hachés), GPO et DNS ;
-6. transférer les rôles **FSMO** et **rétrograder** proprement le DC Proxmox :
-   ces deux étapes sont **documentées mais optionnelles** (mode vérification
-   par défaut), pour pouvoir rejouer la migration sans altérer l'infrastructure
-   de référence.
+6. **option de bascule définitive, hors démonstration** : transférer les rôles
+   **FSMO** et rétrograder le DC Proxmox. Ces deux opérations ne sont **pas la
+   suite de l'AP** : elles ne servent qu'à une **migration totale, sans retour**.
+   La démonstration vise au contraire la **répétabilité** du déploiement : ces
+   étapes sont donc documentées et scriptées (en mode vérification par défaut),
+   mais **non exécutées**.
+
+> **Périmètre :** l'AP s'arrête à la validation de la réplication (DC Azure
+> opérationnel, annuaire étendu). La bascule FSMO + rétrogradation est un
+> scénario distinct de « fermeture du site Proxmox », pertinent en production
+> mais incompatible avec un rejeu en boucle de la démonstration.
 
 > **Point clé :** on ne migre pas le disque de la VM Proxmox (`.qcow2`/`.vmdk`)
 > vers Azure. Le « lift-and-shift » d'un contrôleur de domaine est dangereux
@@ -57,7 +64,7 @@ démarche **DevOps / Infrastructure as Code** :
 | **Sécurité** | Secrets GitHub + paramètres `@secure()`, OIDC (pas de clé Azure stockée), NSG, aucune exposition RDP publique |
 | **Réseau hybride** | Tailscale (WireGuard) entre Proxmox et Azure ; `GatewaySubnet` prévu pour ajouter une passerelle VPN IPsec |
 | **Administration système** | Windows Server 2022, AD DS, DNS, promotion de DC, sites et services AD |
-| **Migration** | Réplication AD, transfert FSMO et rétrogradation (optionnels), validation `repadmin` / `dcdiag` |
+| **Migration** | Réplication AD, validation `repadmin` / `dcdiag` ; transfert FSMO et rétrogradation **hors démonstration** (bascule définitive) |
 | **Exploitation** | Scripts de validation, matrice de flux, plan d'adressage, procédure de rollback |
 
 ---
@@ -146,8 +153,8 @@ est un abonnement gratuit / étudiant, avec des quotas de ressources limités.
 |---|---|---|
 | DC additionnel dans Azure (`SRV-AD-AZ01`) | **déployé** | service critique, cœur de l'AP |
 | Réplication AD, DNS, SYSVOL | **déployé** | continuité de service |
-| Transfert FSMO et rétrogradation | **documenté, manuel** | opérations sensibles, hors pipeline ; le **transfert FSMO et la rétrogradation sont optionnels** et désactivés par défaut (§9.5) |
-| Poste client dans Azure | **non déployé** (à étudier) | images Windows client souvent indisponibles sur les offres gratuites/étudiantes, et quota vCPU (voir §4.2) |
+| Transfert FSMO et rétrogradation | **documenté, hors démonstration** | scénario de bascule définitive (migration totale, sans retour) ; opérations sensibles, hors pipeline, optionnelles et désactivées par défaut (§9.5) |
+| Poste client dans Azure | **hors périmètre** | la démonstration se concentre sur AD DS ; images Windows client souvent indisponibles et quota vCPU (voir §4.2) |
 | `TRUENAS-01` → Azure Files | **proposé, non déployé** | voir §4.3 |
 | `DHCP` | **hors périmètre** | le DHCP Azure imposerait un VPN site-à-site |
 | Second DC Azure (zone de disponibilité) | **hors périmètre** | quota insuffisant |
@@ -165,17 +172,12 @@ Conséquence concrète : on ne raisonne pas en « nombre de VM » mais en
 | Combinaison possible sous 4 vCPU | Total | Remarque |
 |---|---|---|
 | 1 × `Standard_D2as_v4` (2 vCPU / 8 Go) | 2 / 4 | configuration actuelle : confortable |
-| `D2as_v4` + 1 client Linux `B1s` (1 vCPU) | 3 / 4 | laisse 1 vCPU de marge |
-| `D2as_v4` + 1 client Windows `B2s` (2 vCPU) | 4 / 4 | pile le quota, aucune marge |
 | 4 × `B1s` (1 vCPU) | 4 / 4 | mais 1 Go de RAM : insuffisant pour un DC |
 
-Deux pièges à connaître pour le poste client :
-
-- **les images Windows client (10/11)** ne sont pas disponibles sur toutes les
-  offres (souvent réservées aux abonnements dev/test type Visual Studio). À
-  vérifier **avant** de concevoir le module ;
-- à 2 + 2 vCPU, un déploiement échoué qui laisse une VM orpheline bloque le
-  suivant (`QuotaExceeded`). Il faut alors nettoyer le resource group.
+> Ajouter une seconde VM (client, second DC…) consommerait le reste du quota.
+> C'est **hors périmètre** de cette AP, centrée sur AD DS. Un déploiement
+> échoué qui laisse une VM orpheline bloquerait le suivant (`QuotaExceeded`) :
+> il faut alors nettoyer le resource group.
 
 Vérifier le quota avant tout déploiement :
 
@@ -186,23 +188,11 @@ az vm list-usage --location polandcentral -o table | grep -i "Total Regional"
 Stratégie retenue pour tenir dans le quota :
 
 - **une seule VM Azure** dans le déploiement principal (le DC) ;
-- le client de démonstration est soit un **client Linux `B1s`**, soit le poste
-  **déjà existant sur Proxmox**, joint au domaine et authentifié via Tailscale ;
+- pour tester l'authentification, utiliser un poste **déjà existant** sur le LAN
+  Proxmox, joint au domaine et joignable via Tailscale : **aucun client Azure
+  n'est déployé dans cette AP** ;
 - en cas de besoin, libérer le quota avec `az vm deallocate` puis
   `az group delete` (voir §12).
-
-> **Option de test (non déployée dans le Bicep).** Si tu veux valider la
-> jonction depuis une VM Azure, deux solutions ponctuelles suffisent :
->
-> - **Windows Server 2022** (`Standard_B2s`, 2 vCPU) : image disponible sur les
->   offres étudiantes (contrairement à Windows 10/11) ; jonction avec
->   `scripts/clients/join-domain-client.ps1` (`Add-Computer`). Total **4/4 vCPU**.
-> - **Debian 12** (`Standard_B1s`, 1 vCPU) : jonction avec `realm join` / SSSD.
->   Total **3/4 vCPU**.
->
-> Dans les deux cas : NIC configurée avec le DNS `10.3.1.4`, même VNet que le DC
-> (donc pas besoin de Tailscale), VM supprimée après le test. Un DC **sans rôle
-> FSMO** répond normalement à la jonction et aux ouvertures de session.
 
 ### 4.3. Proposition : remplacer TrueNAS par Azure Files (hors périmètre)
 
@@ -323,8 +313,9 @@ AP_1/
 │   │   ├── 02-join-domain.ps1        # jonction manuelle de secours
 │   │   ├── 03-promote-dc.ps1         # promotion en DC additionnel
 │   │   ├── 04-validate-replication.ps1
-│   │   ├── 05-transfer-fsmo.ps1      # audit / transfert FSMO optionnel
-│   │   └── 06-demote-onprem-dc.ps1   # audit / retrogradation optionnelle
+│   │   ├── 05-transfer-fsmo.ps1      # bascule définitive (hors démo) / audit FSMO
+│   │   ├── 06-demote-onprem-dc.ps1   # bascule définitive (hors démo) / audit rétrogradation
+│   │   └── 07-cleanup-azure-dc.ps1   # nettoyage AD + DNS d'un DC Azure decommissionne
 │   ├── truenas/
 │   │   ├── join-domain-truenas.md    # procedure de jonction TrueNAS
 │   │   └── map-smb-shares.ps1        # mappage de secours du lecteur Z:
@@ -501,7 +492,12 @@ Résultat attendu : `repadmin` affiche **0 échec** et les deux ou trois DC
 apparaissent. Le script `scripts/azure-dc/04-validate-replication.ps1` produit
 un rapport complet.
 
-### 9.5. Basculer (si l'objectif est de couper Proxmox)
+### 9.5. Basculer vers Azure — scénario de migration totale (hors démonstration)
+
+> **Ce n'est pas la suite de l'AP.** Cette section décrit ce qu'il faudrait
+> faire pour une **migration définitive, sans retour** : Transférer les FSMO,
+> puis couper le DC Proxmox. Elle n'est **pas exécutée** dans la démonstration,
+> qui s'arrête à la réplication validée pour rester rejouable.
 
 1. **Transférer les rôles FSMO — optionnel** :
    `scripts/azure-dc/05-transfer-fsmo.ps1`. Comme le script `06`, il s'exécute
@@ -514,12 +510,12 @@ un rapport complet.
    exige `-ExecuteDemotion`.
 4. Ajuster DHCP/DNS des clients pour pointer vers le DC Azure.
 
-> Les étapes 1 et 3 sont **volontairement optionnelles**. Elles modifient
-> l'annuaire de référence et empêchent de rejouer la migration en boucle. Pour
-> une démonstration rejouable, on s'arrête après la validation de la
-> réplication, on supprime le resource group Azure, et on redéploie —
+> Les étapes 1 et 3 sont **volontairement optionnelles et hors démonstration**.
+> Elles modifient l'annuaire de référence et empêchent de rejouer la migration
+> en boucle. Pour une démonstration rejouable, on s'arrête après la validation
+> de la réplication, on supprime le resource group Azure, et on redéploie —
 > l'infrastructure Proxmox reste intacte. Procédure détaillée :
-> [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md), phase 11.4
+> [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md), §11.1
 > « Rejouer la démonstration ».
 
 > Ne jamais rétrograder un DC avant d'avoir vérifié que les rôles FSMO et
@@ -594,7 +590,7 @@ az group delete --name rg-redone-adds-lab --yes --no-wait
 >
 > Le **compte ordinateur AD** (`SRV-AD-AZ01`) et le **device Tailscale** ne
 > sont pas dans le resource group : les nettoyer séparément pour un reset
-> complet. Procédure détaillée : `docs/procedure-deploiement.md` §11.4.
+> complet. Procédure détaillée : `docs/procedure-deploiement.md` §11.1.
 
 ---
 
@@ -603,8 +599,8 @@ az group delete --name rg-redone-adds-lab --yes --no-wait
 - Un seul DC dans Azure : pour une vraie haute disponibilité, en déployer un
   second dans une autre zone de disponibilité.
 - Le quota de l'abonnement (4 vCPU régionaux) limite à **une seule VM** dans le
-  déploiement principal ; le poste client est un client Linux léger ou le poste
-  Proxmox existant (voir §4.2).
+  déploiement : le DC. Aucun client Azure n'est déployé ; l'authentification se
+  teste depuis un poste Proxmox existant (voir §4.2).
 - Le DC Azure dépend de Tailscale pour joindre le DC on-prem pendant la migration.
 - Les extensions Azure peuvent afficher un statut `failed` lorsque la VM
   redémarre pendant la promotion : c'est documenté dans
@@ -615,11 +611,12 @@ az group delete --name rg-redone-adds-lab --yes --no-wait
   documentée, mais hors périmètre (voir §4.3).
 - La cible cloud natif (Entra ID + Intune) n'est pas traitée : elle reste une
   perspective d'évolution (voir §3.4).
-- Le **transfert FSMO et la rétrogradation de `SRV-AD` sont optionnels et
-  désactivés par défaut** (`-ExecuteTransfer` / `-ExecuteDemotion`) : ils
-  modifient l'annuaire de référence et empêcheraient de rejouer la migration en
-  boucle. Pour une démonstration rejouable, on conserve le DC Proxmox et on
-  supprime le resource group Azure (§9.5 et runbook §11.4).
+- Le **transfert FSMO et la rétrogradation de `SRV-AD`** relèvent d'un scénario
+  de **migration totale, sans retour**, et sont donc **hors démonstration** :
+  ils sont optionnels et désactivés par défaut (`-ExecuteTransfer` /
+  `-ExecuteDemotion`). Ils modifient l'annuaire de référence et empêcheraient de
+  rejouer la migration en boucle. Pour la démonstration rejouable, on conserve
+  le DC Proxmox et on supprime le resource group Azure (§9.5 et runbook §11.1).
 - La clé Tailscale utilisée doit être révoquée après le déploiement.
 
 ---

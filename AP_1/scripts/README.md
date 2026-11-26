@@ -8,8 +8,9 @@
 | `02-join-domain.ps1` | en secours si la jonction échoue | non (l'extension native est utilisée) |
 | `03-promote-dc.ps1` | phase 2 de la migration | oui (extension `03-PromoteDC`) |
 | `04-validate-replication.ps1` | après le redémarrage de promotion | manuel |
-| `05-transfer-fsmo.ps1` | après validation de la réplication | manuel ; **optionnel**, mode vérification par défaut, `-ExecuteTransfer` pour agir |
-| `06-demote-onprem-dc.ps1` | sur `SRV-AD`, après transfert FSMO | manuel ; **optionnel**, mode vérification par défaut, `-ExecuteDemotion` pour agir |
+| `05-transfer-fsmo.ps1` | après validation de la réplication, **uniquement pour une bascule définitive (hors démonstration)** | manuel ; mode vérification par défaut, `-ExecuteTransfer` pour agir |
+| `06-demote-onprem-dc.ps1` | sur `SRV-AD`, après transfert FSMO, **uniquement pour une bascule définitive (hors démonstration)** | manuel ; mode vérification par défaut, `-ExecuteDemotion` pour agir |
+| `07-cleanup-azure-dc.ps1` | sur `SRV-AD`, après suppression d'une VM promue DC | manuel ; mode vérification par défaut, `-ExecuteCleanup` pour agir |
 
 ## Clients (`clients/`)
 

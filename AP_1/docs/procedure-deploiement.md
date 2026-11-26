@@ -16,16 +16,20 @@ rétrogradation du contrôleur de domaine Proxmox.
 | 1 | Déployer l'infrastructure et joindre le domaine | `promoteDc=false` |
 | 2 | Promouvoir le DC Azure | `promoteDc=true` |
 | 3 | Valider AD, DNS et réplication | `repadmin`, `dcdiag` |
-| 4 | Transférer les rôles FSMO (optionnel) | script `05` |
-| 5 | Rétrograder l'ancien DC (optionnel) et ajuster le réseau | script `06` |
+| 4 | Transférer les rôles FSMO — **hors démonstration** (bascule définitive) | script `05` |
+| 5 | Rétrograder l'ancien DC — **hors démonstration** et ajuster le réseau | script `06` |
 | 6 | Nettoyer / arrêter les coûts | désallouer ou supprimer |
 
-> Les phases 4 et 5 sont **optionnelles** et s'exécutent **en mode vérification
-> par défaut** (aucune modification sans `-ExecuteTransfer` / `-ExecuteDemotion`).
-> Pour rejouer la démonstration en boucle, ne pas les exécuter : voir §11.4.
+> **Périmètre de l'AP.** Les phases 1 à 3 sont le cœur de la démonstration :
+> déployer, promouvoir, valider la réplication. Les phases 4 et 5 (FSMO +
+> rétrogradation) ne sont **pas la suite de l'AP** : elles décrivent une
+> **bascule définitive, sans retour**, hors du périmètre de la démonstration
+> rejouable. Elles restent documentées et scriptées, en mode vérification par
+> défaut (aucune modification sans `-ExecuteTransfer` / `-ExecuteDemotion`).
+> Pour rejouer la démonstration en boucle, ne pas les exécuter : voir §11.1.
 >
 > **Relance rapide** (reset avant chaque nouvelle démonstration) : le résumé de
-> ce qui se supprime et de ce qui se refait est en **§11.4.1**. En bref :
+> ce qui se supprime et de ce qui se refait est en **§11.1.1**. En bref :
 > supprimer le resource group, le device Tailscale et le compte ordinateur AD ;
 > conserver l'app registration OIDC et la clé Tailscale si elle est *Reusable*.
 
@@ -52,7 +56,7 @@ rétrogradation du contrôleur de domaine Proxmox.
 - [ ] **Quota vCPU régional vérifié** :
   `az vm list-usage --location polandcentral -o table | grep -i "Total Regional"`.
   Un abonnement gratuit est typiquement limité à 4 vCPU : c'est suffisant pour
-  le DC (`D2as_v4`, 2 vCPU), pas pour un DC + un client Windows (voir `README.md`
+  le DC (`D2as_v4`, 2 vCPU). Aucun client Azure n'est déployé (voir `README.md`
   §4.2).
 
 ### 1.3. Côté GitHub
@@ -654,13 +658,18 @@ Résultats attendus :
 
 ---
 
-## 8. Phase 4 - Transférer les rôles FSMO (optionnelle)
+## 8. Phase 4 - Transférer les rôles FSMO (option de bascule définitive)
 
-> **Étape optionnelle, désactivée par défaut.** Le script `05` s'exécute en
-> **mode vérification** : il affiche les détenteurs actuels et les rôles qui
-> seraient transférés, sans rien modifier. Le transfert réel exige
-> `-ExecuteTransfer`. Pour une démonstration rejouable, laisser les FSMO sur le
-> DC Proxmox et passer directement au nettoyage (§11.4).
+> **Phase hors démonstration.** Le transfert FSMO ne prolonge **pas** l'AP :
+> c'est une option de **migration totale, sans retour**, qui n'a de sens que si
+> l'on veut ensuite couper le site Proxmox. La démonstration, elle, s'arrête
+> après la phase 3 (réplication validée) et doit rester rejouable.
+>
+> Le script `05` s'exécute en **mode vérification** : il affiche les détenteurs
+> actuels et les rôles qui seraient transférés, sans rien modifier. Le transfert
+> réel exige `-ExecuteTransfer`. Pour la démonstration, laisser les FSMO sur le
+> DC Proxmox et passer directement à la phase 6 (§10) ; pour un rejeu complet,
+> voir §11.1.
 
 À exécuter depuis le **DC Azure**, après validation de la réplication.
 
@@ -689,14 +698,14 @@ Les 5 rôles doivent pointer vers `SRV-AD-AZ01`.
 
 ---
 
-## 9. Phase 5 - Rétrograder l'ancien DC (optionnelle)
+## 9. Phase 5 - Rétrograder l'ancien DC (bascule définitive, hors démonstration)
 
-> **Étape optionnelle, désactivée par défaut.** La rétrogradation est
-> irréversible et empêche de rejouer la migration : elle convient à une
-> fermeture réelle du site Proxmox, pas à une démonstration. Pour rejouer la
-> migration, s'arrêter après la phase 4, supprimer le resource group Azure et
-> redéployer. Les scripts de cette phase ne modifient rien sans
-> `-ExecuteDemotion`.
+> **Phase hors démonstration.** La rétrogradation ne prolonge **pas** l'AP :
+> elle n'a de sens qu'après un transfert FSMO réel, dans un scénario de
+> **migration totale, sans retour**. Elle est irréversible et empêche de rejouer
+> la migration. Pour une démonstration rejouable, s'arrêter après la phase 3,
+> supprimer le resource group Azure et redéployer. Les scripts de cette phase ne
+> modifient rien sans `-ExecuteDemotion`.
 
 ### 9.1. Sauvegarder l'état système de `SRV-AD`
 
@@ -745,75 +754,50 @@ nltest /dsgetdc:redone.local
 
 ## 10. Phase 6 - Nettoyage et coûts
 
-```bash
-# Arrêter la VM sans la supprimer
-az vm deallocate -g rg-redone-adds-lab -n SRV-AD-AZ01
+Deux niveaux, selon que la VM doit être conservée ou non.
 
-# Supprimer tout le laboratoire (attendre la fin avant un reset)
-az group delete --name rg-redone-adds-lab --yes
+**Arrêt temporaire — conserver la VM et son disque** :
+
+```bash
+az vm deallocate -g rg-redone-adds-lab -n SRV-AD-AZ01
 ```
 
-Avant suppression :
+**Suppression définitive du laboratoire Azure** :
 
-- [ ] sauvegarde de l'état système du DC Azure **si la VM a été promue** ;
-- [ ] export des journaux de validation (`04-replication-report.txt`) ;
-- [ ] **rôles FSMO ramenés sur `SRV-AD`** si un transfert réel a eu lieu
-  (voir 11.4) ;
-- [ ] suppression du **compte ordinateur AD** `SRV-AD-AZ01`, ou des
-  métadonnées DC s'il a été promu (voir 11.4) ;
-- [ ] suppression du **device Tailscale** `SRV-AD-AZ01` et note de l'IP
-  statique `100.64.0.4` à réassigner après redéploiement ;
-- [ ] clé Tailscale : la **conserver** si un redéploiement est prévu, la
-  révoquer seulement en cas d'arrêt définitif ;
-- [ ] suppression de l'app registration OIDC **seulement** si elle n'est plus
-  utilisée (la conserver pour un reset) ;
-- [ ] attribution de rôle : avec une portée **abonnement** (§3.4.2), elle n'est
-  **pas** supprimée avec le resource group et rien à refaire ; avec une portée
-  resource group (§3.4.1), elle disparaît avec le groupe et doit être recréée.
+```bash
+az group delete --name rg-redone-adds-lab --yes
+az group exists --name rg-redone-adds-lab   # doit retourner false
+```
 
-> Supprimer le resource group sans ramener les FSMO laisserait le domaine avec
-> des rôles pointant vers un DC disparu : il faudrait alors les **saisir**
-> (`Seize`), opération risquée. C'est précisément ce qu'évite la procédure 11.4.
+> La suppression du resource group ne nettoie **que** ce qui vit dans Azure.
+> Pour un **reset complet** — rejouer la démonstration sans toucher à Proxmox —
+> il faut aussi supprimer le **device Tailscale** et le **compte ordinateur
+> AD** : suivre la procédure de reset **§11.1**. On y trouve également ce qui
+> doit être **conservé** entre deux runs (app registration OIDC, clé Tailscale
+> *Reusable*, attribution de rôle scopée sur l'abonnement).
 
-> Le resource group ne contient **pas** le compte ordinateur AD ni le device
-> Tailscale : ces deux identités sont externes à Azure et doivent être
-> nettoyées séparément pour un reset complet.
+> Avant une suppression définitive : archiver `04-replication-report.txt` et
+> sauvegarder l'état système du DC Azure s'il a été promu.
 
 ---
 
-## 11. Rollback
+## 11. Rollback et rejeu
 
-### 11.1. La jonction échoue
+Cette section couvre deux choses distinctes :
 
-1. Vérifier Tailscale : `tailscale status`, `tailscale ping 100.64.0.10`.
-2. Vérifier le DNS : `Resolve-DnsName redone.local`.
-3. Vérifier les identifiants et l'heure.
-4. Relancer l'extension ou le script `02-join-domain.ps1`.
+- le **rollback** : revenir en arrière après un échec pendant une phase ;
+- le **rejeu** : repartir d'une base propre pour refaire la démonstration.
 
-### 11.2. La promotion échoue
-
-1. Lire `C:\Windows\NTDS\dcpromo.log` et le journal du script.
-2. Corriger DNS / sites AD / droits.
-3. Si le serveur est partiellement promu, utiliser
-   `Uninstall-ADDSDomainController` pour revenir à un serveur membre, puis
-   relancer la promotion.
-4. En dernier recours (laboratoire), supprimer le resource group et redéployer.
-
-### 11.3. L'ancien DC a été rétrogradé trop tôt
-
-- Ne pas paniquer : `SRV-AD2` peut encore assurer le service.
-- Si les FSMO étaient sur `SRV-AD` et qu'il n'est plus joignable, il peut être
-  nécessaire de **saisir** les rôles (`Seize`), opération risquée.
-- Le plus sûr est de restaurer l'état système sauvegardé ou de reconstruire un
-  DC et de laisser la réplication converger.
-- Documenter l'incident : c'est un excellent retour d'expérience pour le jury.
-
-### 11.4. Relancer / rejouer la démonstration (reset)
+### 11.1. Reset complet — rejouer la démonstration (cas courant)
 
 Objectif : refaire la migration plusieurs fois sans toucher à l'infrastructure
 Proxmox de référence. **Ne jamais rétrograder `SRV-AD`** dans ce cas.
 
-#### 11.4.1. Résumé : ce qui se supprime et ce qui se refait
+> C'est la procédure **par défaut** entre deux démonstrations. Les cas
+> particuliers (panne pendant une phase, rétrogradation trop précoce) sont
+> traités en §11.2 et §11.3.
+
+#### 11.1.1. Résumé : ce qui se supprime et ce qui se refait
 
 Supprimer le resource group ne suffit pas : trois identités vivent **en dehors
 d'Azure** et doivent être nettoyées séparément.
@@ -835,12 +819,13 @@ d'Azure** et doivent être nettoyées séparément.
 > 4. Vérifier la clé Tailscale (la régénérer si besoin)
 > 5. Redéployer, puis réaffecter `100.64.0.4`
 
-#### 11.4.2. FSMO — seulement si un transfert réel a eu lieu
+#### 11.1.2. FSMO — seulement si un transfert réel a eu lieu
 
-Les étapes 4 et 5 étant optionnelles et en mode vérification par défaut, les
-rôles FSMO restent normalement sur `SRV-AD`. **Ne pas transférer les FSMO est le
-bon choix pour une démo rejouable** : aucun rôle ne pointe vers le DC Azure
-éphémère.
+Les étapes 4 et 5 étant **hors démonstration** et en mode vérification par
+défaut, les rôles FSMO restent normalement sur `SRV-AD`. **Ne pas transférer les
+FSMO est le bon choix pour une démo rejouable** : aucun rôle ne pointe vers le
+DC Azure éphémère. Ce n'est pas un manque dans l'AP : la bascule définitive est
+un scénario distinct, documenté mais non exécuté.
 
 Si `05-transfer-fsmo.ps1` a quand même été lancé **avec** `-ExecuteTransfer`,
 ramener les rôles sur `SRV-AD` :
@@ -861,7 +846,7 @@ Get-ADForest | Select-Object SchemaMaster, DomainNamingMaster
 
 Les 5 rôles doivent pointer vers `SRV-AD`.
 
-#### 11.4.3. Supprimer le resource group
+#### 11.1.3. Supprimer le resource group
 
 ```bash
 az group delete --name rg-redone-adds-lab --yes
@@ -878,7 +863,7 @@ Attendre la fin de la suppression avant de redéployer : `az group create` peut
 > l'intérêt du choix retenu pour ce livrable : aucun `AuthorizationFailed` ni
 > `No subscriptions found` au run suivant.
 
-#### 11.4.4. Supprimer le device Tailscale
+#### 11.1.4. Supprimer le device Tailscale
 
 Dans la console Tailscale, **Machines** :
 
@@ -903,9 +888,12 @@ En phase 1, une IP différente n'empêche pas la jonction (elle passe par
 `SRV-AD`, `100.64.0.10`). Elle devient critique pour le RDP et pour la phase 3
 (bascule de la règle NRPT vers `100.64.0.4`).
 
-#### 11.4.5. Supprimer le compte ordinateur AD
+#### 11.1.5. Supprimer le compte ordinateur AD
 
-Depuis `SRV-AD`. Choisir le cas selon la phase atteinte.
+Depuis `SRV-AD`. **Cas A et cas B sont deux variantes exclusives, pas deux
+étapes successives** : choisir selon que la VM a été promue ou non. Le cas B
+est un sur-ensemble du cas A : il supprime aussi le compte ordinateur, en plus
+des métadonnées DC.
 
 **Cas A — phase 1 seule (serveur membre)**, le cas normal :
 
@@ -937,35 +925,116 @@ Get-ADObject -SearchBase $dn -Filter * -SearchScope OneLevel |
 Remove-ADObject -Identity $dn -Recursive -Confirm:$false
 ```
 
-> Ne pas utiliser `-Recursive` si l'enfant est un `nTDSSettings` : cela signifie
-> que l'objet est un contrôleur de domaine, et il faut passer par `ntdsutil`
-> (cas B). Vérifier d'abord avec `Get-ADDomainController -Filter *`.
+> Ne pas utiliser `-Recursive` à l'aveugle si l'enfant est un `nTDSSettings` :
+> cela signifie que l'objet est un contrôleur de domaine. Utiliser la procédure
+> **cas B** (script `07` ou `ntdsutil`), qui contrôle d'abord l'état DC et les
+> FSMO, puis supprime les métadonnées dans le bon ordre.
 
 Sans ce nettoyage, la nouvelle VM échoue à la jonction avec un message du type
 « le compte existe déjà ». AD ne peut pas créer deux objets de même nom : il
 réutilise l'ancien (avec ses attributs périmés) ou refuse.
 
-**Cas B — phase 2 (VM promue DC)** :
+**Cas B — phase 2 : la VM a été promue DC** :
+
+À utiliser si la VM a été promue, puis **supprimée définitivement** (resource
+group) ou rétrogradée sans nettoyage. Une simple désallocation ne suffit pas :
+la VM pourrait redémarrer. **Ne pas lancer ce nettoyage sur un DC encore en
+service** : il faut d'abord le rétrograder (voir §9), puis nettoyer les
+métadonnées.
+
+**Pourquoi ces étapes sont nécessaires :**
+
+- **Côté AD** : l'objet ordinateur contient des enfants (`NTDS Settings`,
+  connexions de réplication). Tant qu'ils existent, le KCC tente de répliquer
+  vers une machine disparue → erreurs de réplication, `dcdiag` en échec, et le
+  nom `SRV-AD-AZ01` ne peut pas être réutilisé proprement.
+- **Côté DNS** : les enregistrements `A`, `SRV`, `CNAME` et `NS` pointent
+  encore vers l'ancienne IP. Clients et DC peuvent contacter un DC mort, ce qui
+  fait échouer la jonction ou la promotion suivante.
+- **Côté FSMO** : si le DC supprimé détenait un rôle, il faut d'abord le
+  ramener sur `SRV-AD` (script `05`) ou le saisir (`Seize`). Supprimer les
+  métadonnées avant masquerait le problème.
+
+**Méthode automatisée (recommandée)** — script `07-cleanup-azure-dc.ps1`, à
+exécuter **sur `SRV-AD`** :
 
 ```powershell
-# 1. S'assurer que l'objet n'est plus un DC actif
+# 1. Audit : affiche ce qui serait supprimé, ne modifie rien (défaut)
+.\07-cleanup-azure-dc.ps1
+
+# 2. Simulation du nettoyage réel
+.\07-cleanup-azure-dc.ps1 -ExecuteCleanup -WhatIf
+
+# 3. Nettoyage réel
+.\07-cleanup-azure-dc.ps1 -ExecuteCleanup
+```
+
+Le script :
+
+1. vérifie que la machine n'est plus **joignable sur le réseau** (LDAP 389)
+   et ne détient pas de FSMO, sinon il s'arrête ;
+2. supprime les métadonnées **dans le bon ordre** : `NTDS Settings` (c'est
+   cette suppression qui déclenche le nettoyage des liens de réplication),
+   puis l'objet serveur du site, puis l'objet ordinateur restant et ses
+   enfants ;
+3. supprime les enregistrements DNS résiduels dans `redone.local`,
+   `_msdcs.redone.local` et les zones inverses (`PTR`), y compris le `CNAME`
+   de `_msdcs` qui est nommé par le **GUID** du `NTDS Settings` ;
+4. affiche l'état final (`Get-ADDomainController`, `repadmin /replsummary`).
+
+Il fonctionne aussi pour le **cas A** (serveur membre) : il supprime alors
+simplement l'objet ordinateur et ses éventuels enfants.
+
+Si Tailscale a suffixé le nom lors d'une relance, adapter :
+
+```powershell
+.\07-cleanup-azure-dc.ps1 -ComputerName 'SRV-AD-AZ01-1' -ExecuteCleanup
+```
+
+**Méthode manuelle (si le script n'est pas disponible)** :
+
+```powershell
+# 1. Vérifier la liste des DC (le DC supprimé peut encore y figurer
+#    tant que ses métadonnées existent : c'est normal)
 Get-ADDomainController -Filter * | Format-Table Name, Site
 
-# 2. Nettoyage des métadonnées
+# 2. Nettoyage des métadonnées DC
 ntdsutil
 #   metadata cleanup
 #   select operation target
 #   list sites / select site <n> / list servers in site / select server <n>
 #   quit / remove selected server
+
+# 3. Supprimer l'objet ordinateur s'il subsiste
+$dc = Get-ADComputer -Filter "Name -eq 'SRV-AD-AZ01'" -ErrorAction SilentlyContinue
+if ($dc) {
+    Remove-ADObject -Identity $dc.DistinguishedName -Recursive -Confirm:$false
+}
+
+# 4. Supprimer tous les enregistrements DNS liés à SRV-AD-AZ01
+foreach ($zone in 'redone.local', '_msdcs.redone.local') {
+    Get-DnsServerResourceRecord -ZoneName $zone |
+        Where-Object {
+            $_.HostName -match 'SRV-AD-AZ01' -or
+            $_.RecordData.NameServer -match 'SRV-AD-AZ01' -or
+            $_.RecordData.DomainName -match 'SRV-AD-AZ01' -or
+            $_.RecordData.HostNameAlias -match 'SRV-AD-AZ01'
+        } |
+        ForEach-Object {
+            Remove-DnsServerResourceRecord -ZoneName $zone -InputObject $_ -Force
+        }
+}
 ```
 
-Puis supprimer les enregistrements DNS résiduels de `SRV-AD-AZ01` (`A`, `SRV`,
-`NS`) dans `redone.local` et `_msdcs.redone.local` :
-
-```powershell
-Get-DnsServerResourceRecord -ZoneName 'redone.local' -Name 'SRV-AD-AZ01' -ErrorAction SilentlyContinue
-Remove-DnsServerResourceRecord -ZoneName 'redone.local' -Name 'SRV-AD-AZ01' -RRType A -Force
-```
+> `ntdsutil` supprime normalement le compte DC et `NTDS Settings` ; l'étape 3
+> ci-dessus est une sécurité. Vérifier aussi dans **Sites et Services** qu'il ne
+> reste pas d'objet serveur `SRV-AD-AZ01` sans enfant, et le supprimer le cas
+> échéant.
+>
+> Le `CNAME` de la zone `_msdcs` n'est pas nommé `SRV-AD-AZ01` mais par le
+> **GUID** du `NTDS Settings`. Le filtre ci-dessus le retrouve via
+> `RecordData.HostNameAlias` ; le script `07` le cible aussi directement par
+> son GUID, récupéré **avant** la suppression des métadonnées.
 
 Vérifier qu'il ne reste que les DC voulus (`SRV-AD`, `SRV-AD2`) et que la
 réplication est saine :
@@ -975,7 +1044,7 @@ Get-ADDomainController -Filter * | Format-Table Name, Site, IPv4Address
 repadmin /replsummary
 ```
 
-#### 11.4.6. Vérifier la clé Tailscale
+#### 11.1.6. Vérifier la clé Tailscale
 
 Une clé d'authentification n'est **pas réutilisable par défaut** : utilisée une
 fois, elle devient invalide, et le run suivant échoue avec
@@ -988,7 +1057,7 @@ fois, elle devient invalide, et le run suivant échoue avec
 
 Voir `troubleshooting.md` §3.7.
 
-#### 11.4.7. Redéployer
+#### 11.1.7. Redéployer
 
 Via le pipeline :
 
@@ -1025,6 +1094,31 @@ et ne déplace que les rôles qui ne sont pas déjà sur la cible.
 > conservent. Oublier le device ou le compte AD ne casse pas Azure, mais
 > provoque un nom suffixé dans Tailscale ou une erreur de jonction.
 
+### 11.2. Procédures selon le cas
+
+À utiliser lorsqu'il faut revenir en arrière sur un point précis, sans passer
+par un reset complet.
+
+| Situation | Procédure à suivre |
+|---|---|
+| La jonction au domaine échoue | Diagnostiquer avec `troubleshooting.md` **§4**, corriger, puis relancer l'extension ou `02-join-domain.ps1` |
+| La promotion du DC échoue | Diagnostiquer avec `troubleshooting.md` **§5** ; si le serveur est partiellement promu, le repasser en serveur membre (`Uninstall-ADDSDomainController`) puis relancer la promotion |
+| L'ancien DC a été rétrogradé trop tôt | **§11.3** |
+| Rejouer proprement la démonstration | **§11.1** (reset complet) |
+| Arrêter les coûts sans supprimer la VM | **§10** (désallocation) |
+
+> Les échecs de jonction et de promotion sont des **pannes**, pas des
+> rollbacks : leur diagnostic détaillé est dans `troubleshooting.md` (§4 et
+> §5).
+
+### 11.3. L'ancien DC a été rétrogradé trop tôt
+
+- Ne pas paniquer : `SRV-AD2` peut encore assurer le service.
+- Si les FSMO étaient sur `SRV-AD` et qu'il n'est plus joignable, il peut être
+  nécessaire de **saisir** les rôles (`Seize`), opération risquée.
+- Le plus sûr est de restaurer l'état système sauvegardé ou de reconstruire un
+  DC et de laisser la réplication converger.
+- Documenter l'incident : c'est un excellent retour d'expérience pour le jury.
 
 ---
 
@@ -1041,9 +1135,9 @@ et ne déplace que les rôles qui ne sont pas déjà sur la cible.
 - [ ] `dcdiag` : tests de réplication/DNS OK.
 - [ ] Sites AD `Site-Proxmox` et `Site-Azure` configurés.
 - [ ] `SYSVOL` et `NETLOGON` partagés.
-- [ ] Transfert FSMO **vérifié** (mode vérification par défaut,
-  `-ExecuteTransfer` pour l'action réelle).
-- [ ] Rétrogradation **documentée** (optionnelle : mode vérification par défaut,
-  `-ExecuteDemotion` pour l'action réelle) avec captures.
+- [ ] Transfert FSMO **vérifié en mode audit** — hors démonstration
+  (scénario de bascule définitive ; `-ExecuteTransfer` pour l'action réelle).
+- [ ] Rétrogradation **documentée** — hors démonstration (mode vérification
+  par défaut, `-ExecuteDemotion` pour l'action réelle) avec captures.
 - [ ] Resource group Azure supprimé après la démonstration (si migration rejouable).
 - [ ] Rapport `04-replication-report.txt` archivé.

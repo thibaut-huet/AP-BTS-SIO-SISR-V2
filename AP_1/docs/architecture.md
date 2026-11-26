@@ -101,9 +101,9 @@ Promotion en DC additionnel
         ↓
 Réplication native (NTDS + SYSVOL + DNS)
         ↓
-Transfert FSMO (optionnel, désactivé par défaut)
+Transfert FSMO (bascule définitive, hors démonstration)
         ↓
-Rétrogradation de l'ancien DC (optionnelle, désactivée par défaut)
+Rétrogradation de l'ancien DC (bascule définitive, hors démonstration)
 ```
 
 > Les deux dernières étapes ne sont pas exécutées dans une démonstration
@@ -299,19 +299,20 @@ Resolve-DnsName redone.local
   (typiquement 4). Azure ne limite pas un nombre de VM mais un total de vCPU,
   ce qui contraint à une seule VM dans le déploiement principal. Détail et
   combinaisons possibles : `README.md` §4.2.
-- **Poste client** : un client Windows dans Azure consommerait le reste du
-  quota, et les images Windows client ne sont pas disponibles sur toutes les
-  offres. Le client de démonstration est donc un client Linux léger ou le poste
-  Proxmox existant, authentifié via Tailscale (`README.md` §4.2).
+- **Poste client** : aucun client Azure n'est déployé. L'authentification se
+  teste depuis un poste **déjà existant** du LAN Proxmox, joint au domaine et
+  joignable via Tailscale (`README.md` §4.2). Le périmètre reste centré sur
+  AD DS.
 - **Stockage** : `TRUENAS-01` n'est pas migré. Azure Files est la cible
   proposée (SMB, ACL NTFS, authentification AD DS) mais reste hors périmètre
   (`README.md` §4.3).
 - **Cloud natif** : la cible Entra ID + Intune n'est pas traitée ; elle est
   documentée en perspective avec ses critères de bascule (`README.md` §3.4).
-- **Transfert FSMO et rétrogradation de l'ancien DC** : optionnels et
-  désactivés par défaut (`05-transfer-fsmo.ps1` sans `-ExecuteTransfer`,
-  `06-demote-onprem-dc.ps1` sans `-ExecuteDemotion` = audit seul), afin de
-  pouvoir rejouer la migration sans détruire l'infrastructure Proxmox.
+- **Transfert FSMO et rétrogradation de l'ancien DC** : scénario de **bascule
+  définitive** (migration totale, sans retour), **hors démonstration**. Les
+  scripts sont fournis en mode audit par défaut (`05-transfer-fsmo.ps1` sans
+  `-ExecuteTransfer`, `06-demote-onprem-dc.ps1` sans `-ExecuteDemotion`), afin
+  de pouvoir rejouer la migration sans détruire l'infrastructure Proxmox.
 
 ---
 
