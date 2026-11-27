@@ -82,58 +82,23 @@ Résultat attendu :
 - `tailscale ip -4` retourne l'IP du tailnet, par exemple
   **`100.105.124.41`**.
 
-### 3.4. Faut-il configurer un pare-feu local ?
+## 4. Vérifier l'accès à SonarQube depuis le Tailnet
 
-**Non, pas par défaut.** Une Debian minimale n'installe pas `ufw`, et `ufw`
-n'est pas actif s'il n'a pas été configuré. Pour vérifier :
+La VM n'a **aucune IP publique** et n'est pas exposée sur Internet. Son port 9000 n'est accessible que depuis le réseau local Proxmox ou à travers le VPN Tailscale.
 
-```bash
-sudo ufw status
-```
-
-| Réponse | Signification | Action |
-|---|---|---|
-| `Status: inactive` | `ufw` est installé mais désactivé | rien à faire |
-| `command not found` | `ufw` n'est pas installé | rien à faire |
-| `Status: active` | un pare-feu local filtre déjà | ajouter la règle ci-dessous |
-
-Si `ufw` est actif :
-
-```bash
-sudo ufw allow in on tailscale0 to any port 9000 proto tcp
-sudo ufw status
-```
-
-> **Attention à Docker.** Docker écrit ses propres règles `iptables` et un port
-> publié avec `ports: "9000:9000"` peut **contourner** `ufw`. Si tu veux
-> garantir que SonarQube n'écoute que sur le tailnet, le plus fiable est de
-> publier le port sur l'IP Tailscale de la VM dans `docker-compose.yml` :
->
-> ```yaml
-> ports:
->   - "100.105.124.41:9000:9000"
-> ```
->
-> ou sur `127.0.0.1:9000:9000` avec `tailscale serve` devant. Dans ce laboratoire,
-> la VM n'a **pas d'IP publique** : elle n'est joignable que depuis le LAN
-> Proxmox et le tailnet, donc `ufw` reste facultatif.
-
-## 4. Vérifier l'accès à SonarQube
-
-Depuis un poste membre du tailnet :
+Depuis un poste membre du tailnet (ex: votre PC d'administration avec Tailscale actif) :
 
 ```bash
 curl -I http://100.105.124.41:9000
 ```
 
-Ou dans un navigateur :
+Ou dans un navigateur web :
 
 ```text
 http://100.105.124.41:9000
 ```
 
-La page de connexion SonarQube doit s'afficher. Depuis le DC Proxmox ou un
-poste du LAN, un `ping 100.105.124.41` valide le chemin réseau.
+La page d'accueil de SonarQube doit s'afficher immédiatement. Depuis le contrôleur de domaine Proxmox ou un poste du LAN, un simple `ping 100.105.124.41` permet également de valider la connectivité réseau du tailnet.
 
 ## 5. Créer un client OAuth Tailscale pour GitHub Actions
 
@@ -142,83 +107,93 @@ GitHub Actions ne doit pas utiliser un compte utilisateur : il crée un nœud
 
 1. Se connecter à la console d'administration :
    [login.tailscale.com/admin](https://login.tailscale.com/admin).
-2. Aller dans **Settings → Trust credentials → OAuth clients**.
-3. Cliquer sur **Generate OAuth client**.
-4. Dans **Scopes**, cocher **Devices → Core** avec le droit **Write**
-   (nécessaire pour enregistrer puis supprimer le runner temporaire).
-5. Donner un nom explicite, par exemple `github-actions-ap2`.
-6. Cliquer sur **Generate client** et copier **immédiatement** :
-   - le **Client ID** ;
-   - le **Client Secret**.
-7. Vérifier que le client apparaît dans la liste des clients OAuth actifs.
+2. Aller dans **Settings → Trust credentials → OAuth clients** (ou cliquer sur **+ Credential**).
+3. Donner un nom / description explicite, par exemple `github-actions-ap2` ou `SonarQube`.
+4. Configurer impérativement les **Scopes** et **Tags** suivants :
+   - ✅ **Auth Keys** : cocher **Write** *(INDISPENSABLE : permet au client OAuth d'émettre des clés d'authentification éphémères pour les runners GitHub).*
+   - **Tags (required for write scope)** : sélectionner ou saisir **`tag:ci`** *(le tag doit au préalable être déclaré dans les ACLs, voir section 6).*
+   - ✅ **Devices** : cocher **Write** (ou **Core**).
+   - ⚠️ *Attention : ne pas cocher « OAuth Keys », qui sert à administrer d'autres clients OAuth et non à connecter des machines.*
+5. Cliquer sur **Generate client** et copier **immédiatement** :
+   - le **Client ID** (ex: `k3RZSmqt8511CNTRL`) ;
+   - le **Client Secret** (commençant par `tskey-client-...`).
+6. Vérifier que le client apparaît dans la liste des clients OAuth actifs avec le tag `tag:ci` et le scope `auth_keys:write`.
+
+> ⚠️ **Point de vigilance (Erreur 404 Tailscale) :** Si la case **Auth Keys → Write** n'est pas cochée ou si le tag `tag:ci` n'est pas renseigné sous ce scope lors de la création du client OAuth, le runner GitHub recevra une erreur `Status: 404, Message: "not found"` lors de l'exécution de `tailscale up`.
 
 > Le *Client Secret* n'est affiché qu'une seule fois. En cas de perte, il faut
 > générer un nouveau client.
 
-## 6. Autoriser le tag `tag:ci` dans les ACL
+## 6. Configurer la politique d'accès Tailscale (ACLs & JSON Editor)
 
-### 6.1. Où se configurent les ACL ?
+### 6.1. Qu'est-ce que les ACLs et où les modifier ?
 
-Les ACL Tailscale sont **une politique globale du tailnet**, pas un réglage
-propre à une machine. On ne « met pas un tag sur la VM » dans ses paramètres :
-on modifie **la politique d'accès** dans la console, onglet **Access controls**.
+Les ACLs (*Access Control Lists*) de Tailscale ne sont pas configurées machine par machine sur les VM, mais de manière centralisée pour l'ensemble du réseau privé (*tailnet*).
 
-Cette politique est un fichier JSON. L'extrait donné plus bas n'est donc pas un
-fichier séparé à créer : c'est **le contenu à ajouter ou à fusionner** dans ce
-JSON. Si ta politique contient déjà `tagOwners` ou `grants`, ajoute les clés à
-l'intérieur au lieu de remplacer tout le fichier.
+1. Rendez-vous sur la console d'administration Tailscale : [login.tailscale.com/admin](https://login.tailscale.com/admin).
+2. Cliquez sur l'onglet **Access controls** dans le menu supérieur.
+3. Vous arrivez directement sur le **JSON Editor** : c'est un fichier de configuration unique en JSON qui régit qui a le droit d'utiliser des tags et quelles machines peuvent communiquer entre elles.
 
-Deux choses sont nécessaires :
+---
 
-1. **Déclarer** le tag `tag:ci` dans `tagOwners` (qui a le droit de l'utiliser).
-2. **Autoriser** ce tag à joindre SonarQube dans `grants` (qui peut parler à qui).
+### 6.2. Comprendre le rôle du tag `tag:ci`
 
-### 6.2. Politique minimale
+Par défaut, sur Tailscale, chaque machine appartient à un utilisateur connecté (ex: votre adresse e-mail). 
+Pour un pipeline d'intégration continue (GitHub Actions) :
+- Le runner est une **machine virtuelle éphémère** qui n'a pas d'utilisateur physique pour cliquer sur un lien de connexion web.
+- Pour identifier et sécuriser cette machine automatique, on lui attribue un **Tag** : **`tag:ci`**.
+- Un nœud tagué perd son appartenance à un utilisateur humain et devient une machine de service ("server identity"), ce qui lui permet d'être créée, connectée et détruite automatiquement par un script.
 
-```json
-{
-  "tagOwners": {
-    "tag:ci": ["autogroup:admin"]
-  },
-  "grants": [
-    {
-      "src": ["tag:ci"],
-      "dst": ["100.105.124.41"],
-      "ip": ["tcp:9000"]
-    }
-  ]
-}
-```
+Pour que cela fonctionne, deux règles sont obligatoires dans le JSON :
+1. **`tagOwners`** : Déclare qui a l'autorité pour créer ou assigner le tag. Sans cela, Tailscale bloque toute création de machine taguée (`404 Not Found`).
+2. **`grants`** (ou `acls`) : Définit vers quelles machines et quels ports les nœuds portant ce tag ont le droit d'émettre du trafic.
 
-- `tagOwners` : le client OAuth peut créer des nœuds portant `tag:ci`.
-- `grants` : ces nœuds ne peuvent joindre **que** l'IP Tailscale de la VM, sur
-  le port **9000**.
+---
 
-C'est cette seconde ligne (`grants`) qui répond à « mettre le tag dans l'ACL de
-la VM ». Sans elle, le tag existe mais n'a **aucun droit** d'accès.
+### 6.3. La configuration JSON complète du Tailnet
 
-### 6.3. Variante recommandée : taguer la VM plutôt que son IP
-
-Si l'IP Tailscale de la VM peut changer, remplace l'IP par un tag de machine :
+Voici le fichier JSON de la politique d'accès tel que configuré dans votre **JSON Editor** (partagé entre l'AP_1 et l'AP_2) :
 
 ```json
 {
-  "tagOwners": {
-    "tag:ci": ["autogroup:admin"],
-    "tag:sonarqube": ["autogroup:admin"]
-  },
-  "grants": [
-    {
-      "src": ["tag:ci"],
-      "dst": ["tag:sonarqube"],
-      "ip": ["tcp:9000"]
-    }
-  ]
+	// 1. Déclaration des propriétaires de tags (qui a le droit d'utiliser quel tag)
+	"tagOwners": {
+		"tag:ci":        ["autogroup:admin"],
+		"tag:dc-onprem": ["autogroup:admin"],
+		"tag:dc-azure":  ["autogroup:admin"]
+	},
+
+	// 2. Règles d'accès réseau (filtrage des flux)
+	"grants": [
+		// Règle générale du lab : autorise les flux nécessaires
+		{
+			"src": ["*"],
+			"dst": ["*"],
+			"ip":  ["*"]
+		},
+		// Règle explicite AP_2 : le runner CI (tag:ci) ne peut joindre QUE SonarQube sur le port 9000
+		{
+			"src": ["tag:ci"],
+			"dst": ["100.105.124.41"],
+			"ip":  ["tcp:9000"]
+		}
+	],
+
+	// 3. Accès SSH sécurisé Tailscale
+	"ssh": [
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"]
+		}
+	]
 }
 ```
 
-Puis, dans la console → **Machines** → VM Debian → **Edit → Tags**, appliquer
-`tag:sonarqube`. La règle reste valable même si l'IP change.
+> 💡 **Explication des corrections apportées :**
+> - **`tagOwners`** : Chaque tag (`tag:ci`, `tag:dc-onprem`, `tag:dc-azure`) doit obligatoirement avoir `["autogroup:admin"]`. Si un tag contient une liste vide `[]`, personne ne peut l'assigner, ce qui fait échouer l'enregistrement des machines.
+> - **`grants` pour l'AP_2** : La règle `{ "src": ["tag:ci"], "dst": ["100.105.124.41"], "ip": ["tcp:9000"] }` formalise le principe de moindre privilège : le runner éphémère GitHub Actions ne peut atteindre que le port Web/API de SonarQube et rien d'autre sur le réseau.
 
 ## 7. Configurer les secrets GitHub
 
@@ -234,37 +209,46 @@ Dans le dépôt : **Settings → Secrets and variables → Actions**.
 Vérification : les quatre secrets apparaissent dans la liste, avec une date de
 mise à jour récente. Leur valeur reste masquée.
 
-## 8. Étape Tailscale dans le workflow
+## 8. Fonctionnement de l'étape Tailscale dans le workflow GitHub Actions
 
-Le workflow actif est
-[`../../.github/workflows/ap2-SonarQube.yml`](../../.github/workflows/ap2-SonarQube.yml).
-L'étape Tailscale doit précéder l'analyse SonarQube :
+Le workflow actif qui orchestre l'analyse est situé dans [`.github/workflows/ap2-SonarQube.yml`](../../.github/workflows/ap2-SonarQube.yml) à la racine du dépôt.
+
+### 8.1. Pourquoi Tailscale doit tourner dans le workflow ?
+
+Le runner GitHub Actions est une machine virtuelle temporaire qui s'exécute dans les datacenters de Microsoft/GitHub. Elle n'a aucun moyen natif de joindre l'adresse IP privée de votre VM SonarQube sur Proxmox (`10.2.41.4` ou `100.105.124.41`).
+
+L'action **`tailscale/github-action@v4`** permet au runner de :
+1. Installer le client Tailscale à la volée sur la VM GitHub.
+2. Contacter l'API Tailscale grâce au Client ID et Client Secret OAuth.
+3. Obtenir une clé temporaire et monter un tunnel WireGuard chiffré vers votre Tailnet en tant que machine éphémère (`tag:ci`).
+4. Rendre l'IP `100.105.124.41` routable directement depuis le script GitHub Actions.
+
+### 8.2. Extrait du code YAML dans le workflow
+
+Cette étape doit impérativement être placée **avant** l'étape d'analyse SonarScanner :
 
 ```yaml
-- name: Connexion au réseau privé Tailscale
-  uses: tailscale/github-action@v4
-  with:
-    oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-    oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-    tags: tag:ci
+      # Étape 1 : Le runner GitHub rejoint votre réseau privé Tailscale
+      - name: Connexion au reseau prive Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
 
-- name: Analyse SonarQube
-  uses: SonarSource/sonarqube-scan-action@v8
-  env:
-    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      # Étape 2 : Le scanner peut maintenant interroger SonarQube via l'IP Tailscale
+      - name: Analyse SonarQube
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # http://100.105.124.41:9000
 ```
 
-Points importants :
+### 8.3. Cycle de vie et nettoyage automatique
 
-- **Emplacement du fichier** : `.github/workflows/` à la **racine** du dépôt.
-  GitHub ignore `AP_1/.github/workflows/` et `AP_2/.github/workflows/`.
-- **Ordre** : Tailscale avant le scanner, sinon `SONAR_HOST_URL` est
-  inaccessible.
-- **Fin de job** : l'action Tailscale déconnecte le runner et supprime le nœud
-  éphémère automatiquement.
-- **Version** : `tailscale/github-action@v4` et
-  `SonarSource/sonarqube-scan-action@v8` sont les versions majeures actuelles.
+- **Au début de l'étape :** Le runner démarre `tailscaled`, s'enregistre auprès de la coordination Tailscale avec le tag `tag:ci` et établit les routes réseau.
+- **Pendant l'analyse :** SonarScanner communique avec `http://100.105.124.41:9000` de façon totalement transparente à travers le tunnel chiffré WireGuard.
+- **À la fin du job (Post-run) :** L'action Tailscale s'arrête proprement et informe la console Tailscale de détruire le nœud éphémère. Aucun serveur fantôme ne reste dans votre tableau de bord Tailscale.
 
 ## 9. Vérification de bout en bout
 
@@ -282,6 +266,7 @@ Points importants :
 | Symptôme | Cause probable | Correction |
 |---|---|---|
 | `tailscale up` reste bloqué | authentification non validée | ouvrir l'URL affichée, ou utiliser `--authkey` |
+| `Status: 404, Message: "not found"` | Client OAuth sans scope `Auth Keys: Write` ou tag `tag:ci` manquant | Recréer le client OAuth avec **Auth Keys → Write** et assigner `tag:ci` |
 | Runner sans accès à `:9000` | ACL trop restrictives | autoriser `tag:ci` vers l'IP Tailscale sur `tcp:9000` |
 | `OAuth client not allowed to use tag` | `tag:ci` absent de `tagOwners` | ajouter le tag dans la politique ACL |
 | `Connection timed out` vers `100.x` | VM hors ligne ou Tailscale arrêté | `systemctl status tailscaled`, `tailscale status` |
