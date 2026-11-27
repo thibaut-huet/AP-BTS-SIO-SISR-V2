@@ -31,6 +31,7 @@ jobs:
   sonarqube:
     name: SonarQube Scan
     runs-on: ubuntu-latest
+    environment: azure-lab
     timeout-minutes: 20
 
     steps:
