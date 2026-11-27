@@ -82,15 +82,41 @@ Résultat attendu :
 - `tailscale ip -4` retourne l'IP du tailnet, par exemple
   **`100.105.124.41`**.
 
-### 3.4. Pare-feu local (si `ufw` est actif)
+### 3.4. Faut-il configurer un pare-feu local ?
+
+**Non, pas par défaut.** Une Debian minimale n'installe pas `ufw`, et `ufw`
+n'est pas actif s'il n'a pas été configuré. Pour vérifier :
+
+```bash
+sudo ufw status
+```
+
+| Réponse | Signification | Action |
+|---|---|---|
+| `Status: inactive` | `ufw` est installé mais désactivé | rien à faire |
+| `command not found` | `ufw` n'est pas installé | rien à faire |
+| `Status: active` | un pare-feu local filtre déjà | ajouter la règle ci-dessous |
+
+Si `ufw` est actif :
 
 ```bash
 sudo ufw allow in on tailscale0 to any port 9000 proto tcp
 sudo ufw status
 ```
 
-Sans `ufw`, aucune règle supplémentaire n'est nécessaire : Docker publie le
-port `9000` sur l'hôte.
+> **Attention à Docker.** Docker écrit ses propres règles `iptables` et un port
+> publié avec `ports: "9000:9000"` peut **contourner** `ufw`. Si tu veux
+> garantir que SonarQube n'écoute que sur le tailnet, le plus fiable est de
+> publier le port sur l'IP Tailscale de la VM dans `docker-compose.yml` :
+>
+> ```yaml
+> ports:
+>   - "100.105.124.41:9000:9000"
+> ```
+>
+> ou sur `127.0.0.1:9000:9000` avec `tailscale serve` devant. Dans ce laboratoire,
+> la VM n'a **pas d'IP publique** : elle n'est joignable que depuis le LAN
+> Proxmox et le tailnet, donc `ufw` reste facultatif.
 
 ## 4. Vérifier l'accès à SonarQube
 
@@ -131,10 +157,23 @@ GitHub Actions ne doit pas utiliser un compte utilisateur : il crée un nœud
 
 ## 6. Autoriser le tag `tag:ci` dans les ACL
 
-Le workflow demande le tag `tag:ci`. Ce tag doit exister dans la politique
-d'accès Tailscale, sinon le runner ne peut pas rejoindre le tailnet.
+### 6.1. Où se configurent les ACL ?
 
-Exemple de politique (console Tailscale → **Access controls**) :
+Les ACL Tailscale sont **une politique globale du tailnet**, pas un réglage
+propre à une machine. On ne « met pas un tag sur la VM » dans ses paramètres :
+on modifie **la politique d'accès** dans la console, onglet **Access controls**.
+
+Cette politique est un fichier JSON. L'extrait donné plus bas n'est donc pas un
+fichier séparé à créer : c'est **le contenu à ajouter ou à fusionner** dans ce
+JSON. Si ta politique contient déjà `tagOwners` ou `grants`, ajoute les clés à
+l'intérieur au lieu de remplacer tout le fichier.
+
+Deux choses sont nécessaires :
+
+1. **Déclarer** le tag `tag:ci` dans `tagOwners` (qui a le droit de l'utiliser).
+2. **Autoriser** ce tag à joindre SonarQube dans `grants` (qui peut parler à qui).
+
+### 6.2. Politique minimale
 
 ```json
 {
@@ -151,8 +190,35 @@ Exemple de politique (console Tailscale → **Access controls**) :
 }
 ```
 
-Cette politique autorise **uniquement** les nœuds `tag:ci` à joindre la VM
-SonarQube sur le port 9000. Adapter `dst` si l'IP Tailscale de la VM change.
+- `tagOwners` : le client OAuth peut créer des nœuds portant `tag:ci`.
+- `grants` : ces nœuds ne peuvent joindre **que** l'IP Tailscale de la VM, sur
+  le port **9000**.
+
+C'est cette seconde ligne (`grants`) qui répond à « mettre le tag dans l'ACL de
+la VM ». Sans elle, le tag existe mais n'a **aucun droit** d'accès.
+
+### 6.3. Variante recommandée : taguer la VM plutôt que son IP
+
+Si l'IP Tailscale de la VM peut changer, remplace l'IP par un tag de machine :
+
+```json
+{
+  "tagOwners": {
+    "tag:ci": ["autogroup:admin"],
+    "tag:sonarqube": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["tag:ci"],
+      "dst": ["tag:sonarqube"],
+      "ip": ["tcp:9000"]
+    }
+  ]
+}
+```
+
+Puis, dans la console → **Machines** → VM Debian → **Edit → Tags**, appliquer
+`tag:sonarqube`. La règle reste valable même si l'IP change.
 
 ## 7. Configurer les secrets GitHub
 

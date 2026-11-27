@@ -13,6 +13,10 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
     ports:
+      # Laboratoire : port publie sur toutes les interfaces de la VM, qui n'a
+      # pas d'IP publique. Pour restreindre l'ecoute au tailnet, utiliser l'IP
+      # Tailscale de la VM :
+      #   - "100.105.124.41:9000:9000"
       - "9000:9000"
     restart: unless-stopped
 
