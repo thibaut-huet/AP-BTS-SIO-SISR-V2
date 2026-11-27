@@ -716,7 +716,7 @@ volontaire. Transférer les rôles avec `05`, puis relancer.
 | `DNS update failed` | retirer la passerelle de la configuration TrueNAS, garder le DNS `10.2.41.10` |
 | `Clock skew too great` | resynchroniser l'heure avec le DC |
 | `Join is OK` mais partage inaccessible | vérifier le service SMB, les ACL et l'appartenance au domaine |
-| Lecteur `Z:` absent | GPO : action **Update**, *Run in logged-on user's context* ; sinon `map-smb-shares.ps1` |
+| Lecteur `Z:` absent | GPO : action **Update**, *Run in logged-on user's context* |
 
 ---
 

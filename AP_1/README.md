@@ -308,20 +308,14 @@ AP_1/
 │       └── keyvault.bicep            # coffre de secrets optionnel
 │
 ├── scripts/
-│   ├── azure-dc/
-│   │   ├── 01-setup-tailscale.ps1    # installation + connexion Tailscale
-│   │   ├── 02-join-domain.ps1        # jonction manuelle de secours
-│   │   ├── 03-promote-dc.ps1         # promotion en DC additionnel
-│   │   ├── 04-validate-replication.ps1
-│   │   ├── 05-transfer-fsmo.ps1      # bascule définitive (hors démo) / audit FSMO
-│   │   ├── 06-demote-onprem-dc.ps1   # bascule définitive (hors démo) / audit rétrogradation
-│   │   └── 07-cleanup-azure-dc.ps1   # nettoyage AD + DNS d'un DC Azure decommissionne
-│   ├── truenas/
-│   │   ├── join-domain-truenas.md    # procedure de jonction TrueNAS
-│   │   └── map-smb-shares.ps1        # mappage de secours du lecteur Z:
-│   └── clients/
-│       ├── join-domain-client.ps1    # jonction des postes clients
-│       └── setup-tailscale-client.ps1
+│   └── azure-dc/
+│       ├── 01-setup-tailscale.ps1    # installation + connexion Tailscale
+│       ├── 02-join-domain.ps1        # jonction manuelle de secours
+│       ├── 03-promote-dc.ps1         # promotion en DC additionnel
+│       ├── 04-validate-replication.ps1
+│       ├── 05-transfer-fsmo.ps1      # bascule définitive (hors démo) / audit FSMO
+│       ├── 06-demote-onprem-dc.ps1   # bascule définitive (hors démo) / audit rétrogradation
+│       └── 07-cleanup-azure-dc.ps1   # nettoyage AD + DNS d'un DC Azure decommissionne
 │
 ├── docs/
 │   ├── architecture.md               # choix techniques et flux
@@ -646,7 +640,6 @@ Synthèse :
 | [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md) | runbook complet, OIDC, sites AD, FSMO |
 | [`docs/competences-bts-sio.md`](docs/competences-bts-sio.md) | tableau de compétences pour le jury |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | erreurs fréquentes et résolutions |
-| [`scripts/truenas/join-domain-truenas.md`](scripts/truenas/join-domain-truenas.md) | jonction TrueNAS au domaine |
 
 ---
 

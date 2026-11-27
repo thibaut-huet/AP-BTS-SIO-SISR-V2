@@ -12,20 +12,6 @@
 | `06-demote-onprem-dc.ps1` | sur `SRV-AD`, après transfert FSMO, **uniquement pour une bascule définitive (hors démonstration)** | manuel ; mode vérification par défaut, `-ExecuteDemotion` pour agir |
 | `07-cleanup-azure-dc.ps1` | sur `SRV-AD`, après suppression d'une VM promue DC | manuel ; mode vérification par défaut, `-ExecuteCleanup` pour agir |
 
-## Clients (`clients/`)
-
-| Script | Usage |
-|---|---|
-| `join-domain-client.ps1` | jonction d'un poste Windows au domaine |
-| `setup-tailscale-client.ps1` | accès distant d'un poste au tailnet |
-
-## TrueNAS (`truenas/`)
-
-| Fichier | Usage |
-|---|---|
-| `join-domain-truenas.md` | procédure de jonction du NAS au domaine |
-| `map-smb-shares.ps1` | mappage de secours du lecteur `Z:` |
-
 ## Conventions
 
 - Les scripts écrivent leurs journaux dans `C:\WindowsAzure\Logs\CustomScript`.
