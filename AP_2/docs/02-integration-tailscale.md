@@ -2,7 +2,7 @@
 
 > Ce document décrit l'accès **sans IP publique** à l'instance SonarQube
 > hébergée sur la VM Debian de l'AP_2, puis son intégration dans le workflow
-> GitHub Actions. Source d'origine : `Procedure_SonarQube.odt`.
+> GitHub Actions.
 
 ---
 

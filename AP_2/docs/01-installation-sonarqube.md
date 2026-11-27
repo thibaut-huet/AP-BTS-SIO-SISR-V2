@@ -94,7 +94,8 @@ mkdir -p ~/sonarqube && cd ~/sonarqube
 ```
 
 ### Étape 4.2 : Fichier `docker-compose.yml`
-Créez le fichier `docker-compose.yml` (ou copiez celui présent dans le dossier [`docker/docker-compose.yml`](docker/docker-compose.yml)) :
+Créez le fichier `docker-compose.yml` sur la VM (ou copiez celui fourni dans
+le dépôt : [`../docker/docker-compose.yml`](../docker/docker-compose.yml)) :
 
 ```yaml
 services:

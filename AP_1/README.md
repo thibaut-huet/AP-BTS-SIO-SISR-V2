@@ -153,7 +153,7 @@ est un abonnement gratuit / étudiant, avec des quotas de ressources limités.
 |---|---|---|
 | DC additionnel dans Azure (`SRV-AD-AZ01`) | **déployé** | service critique, cœur de l'AP |
 | Réplication AD, DNS, SYSVOL | **déployé** | continuité de service |
-| Transfert FSMO et rétrogradation | **documenté, hors démonstration** | scénario de bascule définitive (migration totale, sans retour) ; opérations sensibles, hors pipeline, optionnelles et désactivées par défaut (§9.5) |
+| Transfert FSMO et rétrogradation | **documenté, hors démonstration** | scénario de bascule définitive (migration totale, sans retour) ; opérations sensibles, hors pipeline, optionnelles et désactivées par défaut (runbook §8) |
 | Poste client dans Azure | **hors périmètre** | la démonstration se concentre sur AD DS ; images Windows client souvent indisponibles et quota vCPU (voir §4.2) |
 | `TRUENAS-01` → Azure Files | **proposé, non déployé** | voir §4.3 |
 | `DHCP` | **hors périmètre** | le DHCP Azure imposerait un VPN site-à-site |
@@ -192,7 +192,7 @@ Stratégie retenue pour tenir dans le quota :
   Proxmox, joint au domaine et joignable via Tailscale : **aucun client Azure
   n'est déployé dans cette AP** ;
 - en cas de besoin, libérer le quota avec `az vm deallocate` puis
-  `az group delete` (voir §12).
+  `az group delete` (voir runbook §10).
 
 ### 4.3. Proposition : remplacer TrueNAS par Azure Files (hors périmètre)
 
@@ -338,186 +338,29 @@ AP_1/
 
 ---
 
-## 8. Prérequis
+## 8. Déploiement
 
-| Prérequis | Détail |
-|---|---|
-| Abonnement Azure | droits `Contributor` (création du RG et attribution de rôle : `Owner` ou `User Access Administrator`) |
-| Azure CLI | version 2.50+ (support `.bicepparam`) |
-| Bicep CLI | installé par `az bicep install` |
-| Tailscale | compte gratuit, agents sur `SRV-AD` et `SRV-AD-AZ01` |
-| Proxmox | `SRV-AD` opérationnel, DNS et réplication fonctionnels |
-| GitHub | dépôt, droits sur les secrets et variables, environnement `azure-lab` |
-| Réseau | le DC Proxmox doit pouvoir joindre Internet pour Tailscale |
+Le déploiement suit trois phases, décrites pas à pas dans le runbook
+[`docs/procedure-deploiement.md`](docs/procedure-deploiement.md) :
 
-> **Ne pas exposer les contrôleurs de domaine directement sur Internet.**
-> Tailscale crée un tunnel chiffré ; les flux AD ne transitent jamais en clair.
-
----
-
-## 9. Mise en route rapide
-
-### 9.1. Préparer Tailscale
-
-1. Installer Tailscale sur `SRV-AD` et noter son IP `100.x.y.z`.
-2. Dans la console Tailscale, **approuver la route** `10.2.41.0/24` annoncée
-   par `SRV-AD`, puis fixer une **IP statique** pour `SRV-AD`
-   (`100.64.0.10` dans ce livrable). Rien n'est automatique.
-3. Créer une clé d'authentification (`tskey-auth-...`), **Reusable**, et la
-   stocker dans GitHub Secrets `TAILSCALE_AUTH_KEY`.
-4. Vérifier depuis `SRV-AD` : `tailscale status` (aucun « route … not
-   approved ») et `tailscale ip -4`.
-5. Après le déploiement Azure, affecter `100.64.0.4` au device `SRV-AD-AZ01`
-   (voir `docs/procedure-deploiement.md` §5.4).
-
-### 9.2. Configurer Azure et GitHub
-
-Créer une app registration Azure avec fédération OIDC, puis renseigner :
-
-**Variables GitHub** (`Settings > Secrets and variables > Actions > Variables`) :
-
-| Variable | Exemple |
-|---|---|
-| `AZURE_CLIENT_ID` | `00000000-0000-0000-0000-000000000000` |
-| `AZURE_TENANT_ID` | `00000000-0000-0000-0000-000000000000` |
-| `AZURE_SUBSCRIPTION_ID` | `00000000-0000-0000-0000-000000000000` |
-| `AZURE_RESOURCE_GROUP` | `rg-redone-adds-lab` |
-| `AZURE_LOCATION` | `polandcentral` (région **éligible** pour l'abonnement) |
-
-> Le workflow applique `polandcentral` par défaut si `AZURE_LOCATION` n'est pas
-> définie (`${{ vars.AZURE_LOCATION || 'polandcentral' }}`). `main.bicepparam`
-> contient aussi `param location = 'polandcentral'`.
-
-> Coller les **valeurs** GUID, pas les noms de variables shell : `$APP_ID` saisi
-> littéralement dans GitHub provoque `AADSTS700016`. `AZURE_CLIENT_ID` est
-> l'**appId** de l'app registration, pas son object ID. Voir
-> `docs/procedure-deploiement.md` §3.5.
-
-**Secrets GitHub** :
-
-| Secret | Contenu | Contrainte |
+| Phase | Contenu | Validation |
 |---|---|---|
-| `VM_ADMIN_PASSWORD` | mot de passe admin local de la VM Azure (`azureadmin`), pas du domaine | **12 caractères minimum** |
-| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` (maquette Proxmox : `********`) | 8 caractères minimum |
-| `DSRM_PASSWORD` | mot de passe du mode restauration AD | 8 caractères minimum |
-| `TAILSCALE_AUTH_KEY` | clé Tailscale | `tskey-auth-...` |
+| **1. Préparation** | Tailscale sur `SRV-AD`, app registration OIDC, secrets GitHub | `tailscale status` |
+| **2. Infrastructure** | déploiement Bicep de la VM, jonction au domaine | VM visible, `Get-ADDomainController` |
+| **3. Promotion** | promotion en DC additionnel, réplication AD / DNS / SYSVOL | `repadmin` 0 échec, `dcdiag` |
 
-> `VM_ADMIN_PASSWORD` trop court → échec dès le `what-if` avec `BCP333`
-> (minimum 12 caractères). Voir `docs/troubleshooting.md` §2.6.
+Les prérequis (abonnement, CLI, droits, secrets) sont détaillés dans le runbook
+§1 à §3. Les commandes de déploiement, la promotion et les contrôles figurent
+aux §5 à §7. Le transfert FSMO et la rétrogradation relèvent d'un scénario de
+**migration totale, hors démonstration** (runbook §8 et §9).
 
-La procédure détaillée (création de l'app registration, fédération OIDC,
-moindre privilège) est dans [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md).
-
-> **Portée de l'attribution de rôle.** Le `Contributor` du service principal
-> est attribué au **niveau abonnement** dans ce livrable. C'est un périmètre
-> plus large que nécessaire (il couvre toutes les ressources de l'abonnement),
-> mais il **n'est pas supprimé avec le resource group** et permet de rejouer le
-> déploiement plusieurs fois sans rejouer les commandes de rôle.
-> En production, préférer une attribution limitée au resource group, en
-> acceptant de la recréer après chaque `az group delete` (voir
-> `docs/procedure-deploiement.md` §3.4).
-
-### 9.3. Déployer
-
-Option pipeline (recommandée) :
-
-```text
-GitHub > Actions > AP_1 - Deploy Azure AD Infrastructure > Run workflow
-  action     = what-if   (puis deploy)
-  promoteDc  = false     (phase 1 : VM + jonction uniquement)
-```
-
-> Un push sur `main` déploie la phase 1 (`promoteDc=false`). La promotion en
-> contrôleur de domaine (phase 2) se fait uniquement via un lancement manuel
-> avec `promoteDc=true`.
-
-Option CLI (sans GitHub Actions) :
-
-```bash
-# Secrets lus par main.bicepparam via readEnvironmentVariable()
-export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='********'   # maquette Proxmox
-export DSRM_PASSWORD='<mot de passe DSRM>'
-export TAILSCALE_AUTH_KEY='tskey-auth-...'
-
-az group create --name rg-redone-adds-lab --location polandcentral
-
-# Simulation (aucune ressource creee)
-az deployment group what-if \
-  --resource-group rg-redone-adds-lab \
-  --parameters AP_1/bicep/main.bicepparam \
-    promoteDc=false joinDomain=true
-
-# Phase 1 : VM + Tailscale + jonction au domaine (PAS de promotion)
-az deployment group create \
-  --resource-group rg-redone-adds-lab \
-  --name adds-phase1 \
-  --parameters AP_1/bicep/main.bicepparam \
-    promoteDc=false joinDomain=true
-
-# Phase 2 : promotion en DC, seulement apres validation de la phase 1
-az deployment group create \
-  --resource-group rg-redone-adds-lab \
-  --name adds-phase2 \
-  --parameters AP_1/bicep/main.bicepparam \
-    promoteDc=true joinDomain=true
-```
-
-> Les paramètres passés en CLI **surchargent** `main.bicepparam` (qui a
-> `promoteDc = true` par défaut) : sans `promoteDc=false`, la VM est promue
-> directement en une seule fois.
-
-> `main.bicepparam` lit les secrets via `readEnvironmentVariable()` : aucun
-> secret n'apparaît dans la ligne de commande ni dans le fichier de paramètres.
-> Sous PowerShell, remplacer `export X=...` par `$env:X = '...'`.
-
-### 9.4. Valider
-
-Sur `SRV-AD-AZ01` (via Tailscale/RDP) :
-
-```powershell
-Get-Service NTDS, DNS, Netlogon, KDC
-Get-ADDomainController -Filter *
-repadmin /replsummary
-dcdiag /test:replications /test:advertising /test:dns
-```
-
-Résultat attendu : `repadmin` affiche **0 échec** et les deux ou trois DC
-apparaissent. Le script `scripts/azure-dc/04-validate-replication.ps1` produit
-un rapport complet.
-
-### 9.5. Basculer vers Azure — scénario de migration totale (hors démonstration)
-
-> **Ce n'est pas la suite de l'AP.** Cette section décrit ce qu'il faudrait
-> faire pour une **migration définitive, sans retour** : Transférer les FSMO,
-> puis couper le DC Proxmox. Elle n'est **pas exécutée** dans la démonstration,
-> qui s'arrête à la réplication validée pour rester rejouable.
-
-1. **Transférer les rôles FSMO — optionnel** :
-   `scripts/azure-dc/05-transfer-fsmo.ps1`. Comme le script `06`, il s'exécute
-   **en mode vérification par défaut** ; le transfert réel exige
-   `-ExecuteTransfer`.
-2. Vérifier de nouveau la réplication et le partage `SYSVOL`.
-3. **Rétrograder `SRV-AD` — optionnel** :
-   `scripts/azure-dc/06-demote-onprem-dc.ps1`. Le script s'exécute **en mode
-   vérification par défaut** (aucune modification) ; la rétrogradation réelle
-   exige `-ExecuteDemotion`.
-4. Ajuster DHCP/DNS des clients pour pointer vers le DC Azure.
-
-> Les étapes 1 et 3 sont **volontairement optionnelles et hors démonstration**.
-> Elles modifient l'annuaire de référence et empêchent de rejouer la migration
-> en boucle. Pour une démonstration rejouable, on s'arrête après la validation
-> de la réplication, on supprime le resource group Azure, et on redéploie —
-> l'infrastructure Proxmox reste intacte. Procédure détaillée :
-> [`docs/procedure-deploiement.md`](docs/procedure-deploiement.md), §11.1
-> « Rejouer la démonstration ».
-
-> Ne jamais rétrograder un DC avant d'avoir vérifié que les rôles FSMO et
-> `SYSVOL` sont bien répliqués sur le DC Azure.
+> **Aucune exposition directe des contrôleurs de domaine sur Internet.**
+> Tailscale fournit le tunnel chiffré ; les flux AD ne transitent jamais en
+> clair.
 
 ---
 
-## 10. Sécurité et gestion des secrets
+## 9. Sécurité et gestion des secrets
 
 - Aucun mot de passe n'est présent dans `main.bicep`, `main.bicepparam` ou le dépôt.
 - Les paramètres sensibles sont marqués `@secure()` et injectés par GitHub Secrets.
@@ -535,7 +378,7 @@ un rapport complet.
 
 ---
 
-## 11. Choix techniques et justifications
+## 10. Choix techniques et justifications
 
 | Choix | Justification |
 |---|---|
@@ -551,7 +394,7 @@ un rapport complet.
 
 ---
 
-## 12. Coût et nettoyage
+## 11. Coût
 
 Ordre de grandeur (à vérifier sur le calculateur Azure) :
 
@@ -569,26 +412,14 @@ Ordre de grandeur (à vérifier sur le calculateur Azure) :
 > dès la fin de chaque démonstration, sinon le crédit est épuisé avant la
 > soutenance.
 
-**Pour arrêter les frais :**
-
-```bash
-# Desallouer la VM (les disques restent factures)
-az vm deallocate -g rg-redone-adds-lab -n SRV-AD-AZ01
-
-# Ou supprimer tout le resource group de test
-az group delete --name rg-redone-adds-lab --yes --no-wait
-```
-
-> Attention : supprimer le resource group supprime la VM et son disque. En
-> production, sauvegarder l'état système du DC avant toute suppression.
->
-> Le **compte ordinateur AD** (`SRV-AD-AZ01`) et le **device Tailscale** ne
-> sont pas dans le resource group : les nettoyer séparément pour un reset
-> complet. Procédure détaillée : `docs/procedure-deploiement.md` §11.1.
+Le nettoyage (désallocation de la VM, suppression du resource group, retrait
+du compte ordinateur AD et du device Tailscale) est décrit dans le runbook
+§10 et §11.1. Il fait partie intégrante de la démarche rejouable : chaque
+démonstration repart d'un resource group neuf.
 
 ---
 
-## 13. Limites connues / pistes d'amélioration
+## 12. Limites connues / pistes d'amélioration
 
 - Un seul DC dans Azure : pour une vraie haute disponibilité, en déployer un
   second dans une autre zone de disponibilité.
@@ -610,12 +441,12 @@ az group delete --name rg-redone-adds-lab --yes --no-wait
   ils sont optionnels et désactivés par défaut (`-ExecuteTransfer` /
   `-ExecuteDemotion`). Ils modifient l'annuaire de référence et empêcheraient de
   rejouer la migration en boucle. Pour la démonstration rejouable, on conserve
-  le DC Proxmox et on supprime le resource group Azure (§9.5 et runbook §11.1).
+  le DC Proxmox et on supprime le resource group Azure (runbook §8 et §11.1).
 - La clé Tailscale utilisée doit être révoquée après le déploiement.
 
 ---
 
-## 14. Compétences BTS SIO SISR mobilisées
+## 13. Compétences BTS SIO SISR mobilisées
 
 Le détail est dans [`docs/competences-bts-sio.md`](docs/competences-bts-sio.md).
 Synthèse :
@@ -630,7 +461,7 @@ Synthèse :
 
 ---
 
-## 15. Documentation détaillée
+## 14. Documentation détaillée
 
 | Document | Contenu |
 |---|---|
@@ -643,7 +474,7 @@ Synthèse :
 
 ---
 
-## 16. Avertissement
+## 15. Avertissement
 
 Ce projet est un **laboratoire pédagogique**. Les mots de passe fournis dans les
 documents (`********` pour le DSRM, `********` pour le compte
