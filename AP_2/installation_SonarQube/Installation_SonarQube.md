@@ -1,10 +1,10 @@
-# 🚀 Procédure d'installation de SonarQube avec Docker Compose (Debian sur Proxmox)
+# Procédure d'installation de SonarQube avec Docker Compose (Debian sur Proxmox)
 
 Ce document détaille l'installation et la configuration de la plateforme d'analyse de code **SonarQube Community Edition** adossée à une base de données **PostgreSQL 16**, conteneurisées avec Docker sur une machine virtuelle **Debian** hébergée sous **Proxmox VE**.
 
 ---
 
-## 📋 1. Prérequis & Contexte
+## 1. Prérequis & Contexte
 
 - **Environnement hôte** : Machine Virtuelle Debian existante hébergée sur l'hyperviseur Proxmox.
 - **Ressources recommandées** :
@@ -15,7 +15,7 @@ Ce document détaille l'installation et la configuration de la plateforme d'anal
 
 ---
 
-## ⚙️ 2. Configuration système (Noyau et Mémoire Virtuelle)
+## 2. Configuration système (Noyau et Mémoire Virtuelle)
 
 SonarQube intègre un moteur Elasticsearch qui nécessite une configuration spécifique de la mémoire virtuelle (`vm.max_map_count`) et du nombre maximal de descripteurs de fichiers (`fs.file-max`). Sans cela, le conteneur plantera immédiatement au démarrage.
 
@@ -32,7 +32,7 @@ echo "fs.file-max=131072" | sudo tee -a /etc/sysctl.d/99-sonarqube.conf
 sudo sysctl --system
 ```
 
-### ✅ Vérification
+### Vérification
 Exécutez la commande suivante :
 ```bash
 sysctl vm.max_map_count
@@ -41,7 +41,7 @@ sysctl vm.max_map_count
 
 ---
 
-## 🐳 3. Installation de Docker et Docker Compose
+## 3. Installation de Docker et Docker Compose
 
 ### Étape 3.1 : Nettoyage et dépendances
 Supprimez les versions obsolètes ou paquets non officiels, puis installez les outils de base :
@@ -71,7 +71,7 @@ sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-### ✅ Vérification des versions
+### Vérification des versions
 ```bash
 docker --version && docker compose version
 ```
@@ -85,7 +85,7 @@ newgrp docker
 
 ---
 
-## 🛠️ 4. Déploiement de SonarQube avec Docker Compose
+## 4. Déploiement de SonarQube avec Docker Compose
 
 ### Étape 4.1 : Préparation de l'arborescence
 Créez un dossier dédié pour héberger la configuration :
@@ -106,7 +106,7 @@ services:
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
-      SONAR_JDBC_PASSWORD: ChangerCeMotDePasse_123
+      SONAR_JDBC_PASSWORD: ********
     volumes:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
@@ -120,7 +120,7 @@ services:
     container_name: sonarqube-db
     environment:
       POSTGRES_USER: sonar
-      POSTGRES_PASSWORD: ChangerCeMotDePasse_123
+      POSTGRES_PASSWORD: ********
       POSTGRES_DB: sonar
     volumes:
       - postgresql_data:/var/lib/postgresql/data
@@ -137,7 +137,7 @@ volumes:
 
 ---
 
-## 🚀 5. Démarrage et suivi des conteneurs
+## 5. Démarrage et suivi des conteneurs
 
 Lancez les conteneurs en arrière-plan :
 ```bash
@@ -153,7 +153,7 @@ Attendez l'affichage du message indiquant que SonarQube est opérationnel :
 
 ---
 
-## 🌐 6. Accès à l'interface Web
+## 6. Accès à l'interface Web
 
 1. Ouvrez votre navigateur et accédez à l'URL suivante (en remplaçant par l'adresse IP de votre VM Debian) :
    ```text
@@ -162,13 +162,13 @@ Attendez l'affichage du message indiquant que SonarQube est opérationnel :
 
 2. **Identifiants de première connexion par défaut** :
    - **Identifiant** : `admin`
-   - **Mot de passe initial** : `admin` *(ou le mot de passe défini lors du premier paramétrage)*
+   - **Mot de passe initial** : `********` *(ou le mot de passe défini lors du premier paramétrage)*
 
 3. Lors du premier accès, SonarQube vous demandera de modifier le mot de passe administrateur par défaut.
 
 ---
 
-## 🛑 7. Commandes utiles d'administration
+## 7. Commandes utiles d'administration
 
 | Action | Commande |
 |---|---|

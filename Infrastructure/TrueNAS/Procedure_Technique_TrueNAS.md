@@ -67,7 +67,7 @@ Ce document détaille la procédure technique d'installation et de configuration
 | Champ | Valeur |
 |---|---|
 | Identifiant | `truenas_admin` |
-| Mot de passe | `root` |
+| Mot de passe | `********` |
 
 
 
@@ -171,7 +171,7 @@ systemctl restart chronyd
 |---|---|
 | Type d'identifiant | Kerberos User |
 | Utilisateur | `Administrateur` |
-| Mot de passe | `ServeurAzure2022` |
+| Mot de passe | `********` |
 | Domaine | `redone.local` |
 |nom hôte truenas | 'truenas_admin' |
 |nom de domaine | 'redone.local'|

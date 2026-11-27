@@ -1,0 +1,12 @@
+# Fichiers sensibles et inventaire des mots de passe
+MOTS_DE_PASSE.md
+passwords.md
+*.secrets
+*.env
+.env
+
+# Artefacts locaux (compilation Bicep pour SonarQube)
+build/
+
+# Fichiers verrou LibreOffice
+.~lock.*

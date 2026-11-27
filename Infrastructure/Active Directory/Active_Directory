@@ -92,7 +92,7 @@ Partitionner le disque virtuel de 60 Go et exécuter l'assistant d'installation.
 
 Lors du premier démarrage, définir le mot de passe du compte Administrateur local :
 
-- **Mot de passe :** `ServeurAzure2022`
+- **Mot de passe :** `********`
 
 > Ce compte devient le compte `REDONE\Administrateur` après la promotion en
 > contrôleur de domaine. C'est cette valeur qui doit être saisie dans le secret
@@ -159,7 +159,7 @@ Une fois le rôle installé, une notification dans le Gestionnaire de serveur in
 | Option de déploiement | Ajouter une nouvelle forêt |
 | Nom de domaine racine | `redone.local` |
 | Niveau fonctionnel | Windows Server 2016 (ou supérieur) |
-| Mot de passe DSRM | Serveur2022 |
+| Mot de passe DSRM | ******** |
 
 ![Assistant de promotion en contrôleur de domaine](images/image8.png)
 
@@ -217,9 +217,9 @@ Les comptes utilisateurs ont été créés avec des identifiants standardisés (
 
 | Nom complet | Login | Mot de passe initial | Groupe |
 |---|---|---|---|
-| Alice Martin | `amartin` | `P@ssw0rd123 ou Azerty123` | Direction |
-| Hugo Bernard | `hbernard` | `P@ssw0rd123 ou Azerty123` | Compta |
-| Sarah Leroy | `sleroy` | `P@ssw0rd123 ou Azerty123` | DSI |
+| Alice Martin | `amartin` | `********` | Direction |
+| Hugo Bernard | `hbernard` | `********` | Compta |
+| Sarah Leroy | `sleroy` | `********` | DSI |
 
 Utilisation d'un script Powershell pour la création automatique : 
 foreach ($Utilisateur in $CSVData) {
@@ -227,7 +227,7 @@ foreach ($Utilisateur in $CSVData) {
     $UtilisateurNom = $Utilisateur.Nom
     $UtilisateurLogin = ($UtilisateurPrenom).Substring(0,1) + "." + $UtilisateurNom
     $UtilisateurEmail = "$UtilisateurLogin@redone.local"
-    $UtilisateurMotDePasse = "P@ssw0rd123"
+    $UtilisateurMotDePasse = "********"
     $UtilisateurFonction = $Utilisateur.Fonction
 
     # Vérifier la présence de l'utilisateur dans l'AD

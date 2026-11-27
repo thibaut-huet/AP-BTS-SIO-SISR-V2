@@ -530,7 +530,7 @@ Reset-ComputerMachinePassword -Server SRV-AD -Credential (Get-Credential)
 - Vérifier que le compte n'est pas verrouillé.
 - **Vérifier que `DOMAIN_JOIN_PASSWORD` correspond exactement au mot de passe
   actuel de `REDONE\Administrateur` sur `SRV-AD`.** Sur la maquette Proxmox,
-  ce mot de passe est `ServeurAzure2022`. Un changement côté AD sans mise à
+  ce mot de passe est `********`. Un changement côté AD sans mise à
   jour du secret GitHub (ou l'inverse) fait échouer la jonction avec
   `The user name or password is incorrect`.
 - Vérifier l'OU cible : si elle n'existe pas, la jonction échoue.
@@ -548,8 +548,8 @@ Test-ComputerSecureChannel -Server SRV-AD
   caractères interprétés par le shell (le workflow utilise des variables
   d'environnement, mais vérifier les guillemets).
 - Vérifier que `DOMAIN_JOIN_PASSWORD` est bien le mot de passe **actuel** de
-  `REDONE\Administrateur` (maquette : `ServeurAzure2022`) et non l'ancien
-  `Serveur2022`.
+  `REDONE\Administrateur` (maquette : `********`) et non l'ancien
+  `********`.
 - Relancer l'extension après correction.
 
 ---

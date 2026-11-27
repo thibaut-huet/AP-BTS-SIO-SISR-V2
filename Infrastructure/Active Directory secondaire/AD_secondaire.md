@@ -338,7 +338,7 @@ Une fois le rôle AD DS installé, une notification invite à promouvoir le serv
 #### Étape 4 : Authentification avec le Compte Administrateur du Domaine
 1. Dans la boîte de dialogue contextuelle *Sécurité Windows*, fournir les identifiants d'un compte possédant les privilèges d'administration de domaine :
    - **Nom d'utilisateur :** `REDONE\Administrateur`
-   - **Mot de passe :** `ServeurAzure2022` *(mot de passe du domaine, identique au secret `DOMAIN_JOIN_PASSWORD`)*
+   - **Mot de passe :** `********` *(mot de passe du domaine, identique au secret `DOMAIN_JOIN_PASSWORD`)*
 2. Cliquer sur **OK**.
 
 ![Saisie des informations d'identification d'administration REDONE\Administrateur](<image AD secondaire/Capture d'écran 2026-10-16 115156.png>)
@@ -363,7 +363,7 @@ Les informations d'identification sont désormais validées et associées à l'a
 1. Laisser les cases cochées par défaut :
    - **Serveur DNS (Domain Name System)** : Permet d'installer et répliquer automatiquement le rôle DNS.
    - **Catalogue global (GC)** : Permet de répondre localement aux requêtes d'authentification et de recherche universelle d'objets.
-2. Définir le mot de passe du mode de restauration des services d'annuaire (**DSRM**) : `Serveur2022`.
+2. Définir le mot de passe du mode de restauration des services d'annuaire (**DSRM**) : `********`.
 3. Sélectionner le partenaire de réplication : `SRV-AD.redone.local` (ou *N'importe quel contrôleur de domaine*).
 4. Valider les chemins d'accès par défaut de la base de données (`C:\Windows\NTDS`) et du dossier partagé SYSVOL (`C:\Windows\SYSVOL`).
 

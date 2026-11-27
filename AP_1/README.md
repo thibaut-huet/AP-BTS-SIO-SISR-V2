@@ -398,7 +398,7 @@ Créer une app registration Azure avec fédération OIDC, puis renseigner :
 | Secret | Contenu | Contrainte |
 |---|---|---|
 | `VM_ADMIN_PASSWORD` | mot de passe admin local de la VM Azure (`azureadmin`), pas du domaine | **12 caractères minimum** |
-| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` (maquette Proxmox : `ServeurAzure2022`) | 8 caractères minimum |
+| `DOMAIN_JOIN_PASSWORD` | mot de passe de `REDONE\Administrateur` (maquette Proxmox : `********`) | 8 caractères minimum |
 | `DSRM_PASSWORD` | mot de passe du mode restauration AD | 8 caractères minimum |
 | `TAILSCALE_AUTH_KEY` | clé Tailscale | `tskey-auth-...` |
 
@@ -436,7 +436,7 @@ Option CLI (sans GitHub Actions) :
 ```bash
 # Secrets lus par main.bicepparam via readEnvironmentVariable()
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
+export DOMAIN_JOIN_PASSWORD='********'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 
@@ -646,7 +646,7 @@ Synthèse :
 ## 16. Avertissement
 
 Ce projet est un **laboratoire pédagogique**. Les mots de passe fournis dans les
-documents (`Serveur2022` pour le DSRM, `ServeurAzure2022` pour le compte
+documents (`********` pour le DSRM, `********` pour le compte
 `REDONE\Administrateur`) sont des mots de passe de maquette et ne doivent jamais
 être réutilisés en production. Les secrets réels doivent être générés
 aléatoirement, stockés dans un coffre et renouvelés.

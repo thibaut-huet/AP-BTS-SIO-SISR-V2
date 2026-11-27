@@ -344,7 +344,7 @@ car le job déclare `environment: azure-lab`) — ou à défaut
 | Secret | Portée | Valeur / contrainte |
 |---|---|---|
 | `VM_ADMIN_PASSWORD` | **Compte administrateur local de la VM Azure** (`azureadmin`), pas le compte de domaine | **12 caractères minimum**, majuscule + minuscule + chiffre + caractère spécial |
-| `DOMAIN_JOIN_PASSWORD` | Compte de domaine `REDONE\Administrateur` (maquette Proxmox : `ServeurAzure2022`) | 8 caractères minimum, **doit correspondre au mot de passe réel du compte sur `SRV-AD`** |
+| `DOMAIN_JOIN_PASSWORD` | Compte de domaine `REDONE\Administrateur` (maquette Proxmox : `********`) | 8 caractères minimum, **doit correspondre au mot de passe réel du compte sur `SRV-AD`** |
 | `DSRM_PASSWORD` | Mot de passe DSRM (restauration AD) | 8 caractères minimum |
 | `TAILSCALE_AUTH_KEY` | Clé Tailscale | `tskey-auth-...` |
 
@@ -439,7 +439,7 @@ En CLI (équivalent) :
 
 ```bash
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
+export DOMAIN_JOIN_PASSWORD='********'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 
@@ -539,7 +539,7 @@ Get-Content C:\WindowsAzure\Logs\Plugins\Microsoft.Compute.JsonADDomainExtension
 - [ ] `Site-Azure` existe et contient `10.3.1.0/24` + `100.64.0.0/10`.
 - [ ] Le compte `REDONE\Administrateur` fonctionne.
 - [ ] Le secret `DOMAIN_JOIN_PASSWORD` correspond au mot de passe réel de
-      `REDONE\Administrateur` sur `SRV-AD` (maquette : `ServeurAzure2022`).
+      `REDONE\Administrateur` sur `SRV-AD` (maquette : `********`).
 - [ ] Le mot de passe DSRM est disponible.
 - [ ] Le secret `VM_ADMIN_PASSWORD` fait **au moins 12 caractères** (compte
       local `azureadmin` de la VM Azure, pas le compte de domaine).
@@ -558,7 +558,7 @@ En CLI :
 
 ```bash
 export VM_ADMIN_PASSWORD='<mot de passe admin VM>'
-export DOMAIN_JOIN_PASSWORD='ServeurAzure2022'   # maquette Proxmox
+export DOMAIN_JOIN_PASSWORD='********'   # maquette Proxmox
 export DSRM_PASSWORD='<mot de passe DSRM>'
 export TAILSCALE_AUTH_KEY='tskey-auth-...'
 

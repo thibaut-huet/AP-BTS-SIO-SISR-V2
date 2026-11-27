@@ -50,8 +50,8 @@ Ce document détaille la procédure pas à pas pour l'installation d'une machine
 
 | Compte / Paramètre | Identifiant (Username) | Mot de passe (Password) | Description |
 |---|---|---|---|
-| **Superutilisateur** | `root` | `debianuser` | Compte avec privilèges d'administration système complets |
-| **Utilisateur standard** | `debianuser` | `debianuser` | Compte utilisateur principal pour la session graphique |
+| **Superutilisateur** | `root` | `********` | Compte avec privilèges d'administration système complets |
+| **Utilisateur standard** | `debianuser` | `********` | Compte utilisateur principal pour la session graphique |
 | **Nom de machine (Hostname)** | `userdebian` | - | Identifiant de la machine sur le réseau |
 | **Domaine réseau** | `redone.local` | - | Domaine DNS local de l'infrastructure |
 
@@ -102,7 +102,7 @@ Indiquer le nom de domaine de l'infrastructure d'entreprise :
 ### Étape 4 : Définition du mot de passe Superutilisateur (root)
 
 Paramétrer le mot de passe d'administration du compte `root` :
-- **Mot de passe root :** `debianuser`
+- **Mot de passe root :** `********`
 - **Confirmation :** `debianuser`
 
 ![Configuration du mot de passe root](image/4.png)
@@ -122,7 +122,7 @@ Saisir le nom complet pour l'utilisateur courant du système :
 
 Saisir et confirmer le mot de passe pour le compte utilisateur `debianuser` :
 - **Identifiant :** `debianuser`
-- **Mot de passe :** `debianuser`
+- **Mot de passe :** `********`
 - **Confirmation :** `debianuser`
 
 ![Configuration du mot de passe utilisateur](image/6.png)
@@ -215,4 +215,4 @@ Sélectionner explicitement le disque dur d'amorce :
 
 ## 5. Conclusion
 
-L'installation de la machine virtuelle `userdebian` est finalisée. La VM redémarrera directement sur l'environnement graphique GNOME avec l'accès SSH activé. Les identifiants créés (`root` / `debianuser` avec le mot de passe `debianuser`) permettent de prendre la main immédiatement sur le système pour la suite du TP.
+L'installation de la machine virtuelle `userdebian` est finalisée. La VM redémarrera directement sur l'environnement graphique GNOME avec l'accès SSH activé. Les identifiants créés (`root` / `debianuser` avec le mot de passe `********`) permettent de prendre la main immédiatement sur le système pour la suite du TP.

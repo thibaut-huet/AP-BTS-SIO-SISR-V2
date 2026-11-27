@@ -1,0 +1,68 @@
+name: AP_2 - Analyse SonarQube (IaC)
+
+# ============================================================================
+#  AP_2 - Analyse statique du code de l'AP_1 avec SonarQube
+# ----------------------------------------------------------------------------
+#  Ce workflow est un projet DISTINCT de l'AP_1 : il ne deploie aucune ressource
+#  Azure. Il compile les templates Bicep de l'AP_1 en ARM (format reellement
+#  analyse par SonarQube Community), se connecte au SonarQube auto-heberge via
+#  Tailscale, puis lance le SonarScanner.
+#
+#  Emplacement OBLIGATOIRE : .github/workflows/ a la RACINE du depot.
+#  GitHub Actions ignore tout dossier .github/workflows imbrique (ex:
+#  AP_1/.github/workflows/ ou AP_2/.github/workflows/).
+# ============================================================================
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonarqube-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Recuperation du code
+        uses: actions/checkout@v4
+        with:
+          # Historique complet necessaire pour le calcul du "new code".
+          fetch-depth: 0
+
+      - name: Connexion au reseau prive Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Installation du CLI Bicep
+        run: |
+          curl -sSLo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x bicep
+          ./bicep --version
+
+      - name: Compilation Bicep -> ARM
+        run: |
+          # SonarQube Community analyse l'ARM JSON, pas le Bicep source.
+          # On compile donc les templates avant l'analyse.
+          mkdir -p build/arm
+          ./bicep build AP_1/bicep/main.bicep --outfile build/arm/main.json
+          ls -l build/arm
+
+      - name: Analyse SonarQube
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
